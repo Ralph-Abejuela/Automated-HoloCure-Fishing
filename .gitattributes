@@ -1,0 +1,5 @@
+# uv parses .python-version verbatim; a CRLF checkout would break it.
+.python-version text eol=lf
+
+# Keep shell scripts LF so they stay executable on Linux.
+*.sh text eol=lf

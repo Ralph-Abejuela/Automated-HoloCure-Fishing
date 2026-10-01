@@ -16,17 +16,18 @@ extract the '**Automated-HoloCure-Fishing-vX.X.X.zip**' and then open **holocure
 
 ## Using from source
 1. Clone this project.
-2. Execute [prepare.bat](prepare.bat) or copy content to your console (this will setup a python "test_env" environment so you do not contaminate your system wide python installation).
-3. Execute [launch_python.bat](launch_python.bat) to open a console using the environment or copy the content to your console or skip this step and
-4. Open HoloCure.
-5. Start fishing by opening holocure_fishing.py or in your console "python holocure_fishing.py" or by any other means you want.
-6. Select if you want to fish or mine.
-6. Go to Holo House and start fishing or mining.
-7. Enjoy!
+2. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (it manages the Python version and the environment for you, so you do not contaminate your system wide python installation).
+3. Execute [prepare.bat](prepare.bat) or run `uv sync` in your console (this creates the .venv environment with all dependencies).
+4. Execute [launch_python.bat](launch_python.bat) to open a console using the environment or copy the content to your console or skip this step and
+5. Open HoloCure.
+6. Start fishing by opening holocure_fishing.py or in your console "uv run holocure_fishing.py" or by any other means you want.
+7. Select if you want to fish or mine.
+8. Go to Holo House and start fishing or mining.
+9. Enjoy!
 
 # Getting Started on Linux
 
-1. Make sure you have Python installed.
+1. Make sure you have [uv](https://docs.astral.sh/uv/getting-started/installation/) installed.
 2. Clone or download this repo.
 3. Open HoloCure and head to the fishing area.
 4. Execute the run.sh script. (on some systems you might have to make the script executable first)
@@ -34,7 +35,7 @@ extract the '**Automated-HoloCure-Fishing-vX.X.X.zip**' and then open **holocure
 $ chmod +x run.sh
 $ ./run.sh
 ```
-6. Start fishing!
+5. Start fishing!
 
 Notes (read first before running!)
 - This has only been tested on X11. On Wayland, Holocure runs under the Xwayland compatibility layer so it **might** work, but I don't have a machine to test.
@@ -57,24 +58,29 @@ Any setting is fine! As long as the game is windowed and not fullscreen.
 
 
 # Building from source
-If you have python installed, run:
-`pip install -r requirements.txt`
+This project uses [uv](https://docs.astral.sh/uv/). Dependencies are declared in
+`pyproject.toml` and pinned in `uv.lock`.
 
-Or
+* Install uv, then run:
+`uv sync`
 
-* python 3.11.4 or later
+or
+
+* python 3.11 or 3.12
 * numpy (`pip install numpy`)
 * opencv-python (`pip install opencv-python`)
-* pywin32 (`pip install pywin32`)
+* pywin32 on Windows (`pip install pywin32`)
+* python-xlib on Linux (`pip install python-xlib`)
 
 ## Building exe from source
 [//]: <> (TODO: Make a setup.py)
 run:
-`pip install nuitka`
+`uv sync --group dev`
+(the `dev` group installs nuitka)
 
 then run:
 ```powershell
-python -m nuitka --include-data-files="img/360p/*.png=img/360p/" --onefile .\holocure_fishing.py
+uv run python -m nuitka --include-data-files="img/360p/*.png=img/360p/" --onefile .\holocure_fishing.py
 ```
 > make sure you are in the **Automated-Holocure-Fishing** folder
 

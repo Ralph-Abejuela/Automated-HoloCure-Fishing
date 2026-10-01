@@ -1,5 +1,6 @@
 debug/
 .venv/
+__pypackages__/
 __pycache__/
 .idea/*
 holocure_fishing.*/
