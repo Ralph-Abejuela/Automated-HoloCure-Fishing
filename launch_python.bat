@@ -1,1 +1,1 @@
-.venv\Scripts\python.exe holocure_fishing.py
+uv run holocure_fishing.py
