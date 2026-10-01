@@ -14,21 +14,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from timings import Timings
 
+#: One Tk interpreter for the whole module. A second one, outliving a
+#: destroyed first, makes Tk broadcast theme changes to an interpreter that
+#: has already gone, and that prints to stderr in the middle of a test run
+#: where it reads like a failure. Tests withdraw this and put it back up
+#: rather than making their own.
+_ROOT = None
+
 
 def setUpModule():
+    global _ROOT
     try:
         import tkinter
 
-        root = tkinter.Tk()
+        _ROOT = tkinter.Tk()
     except Exception as error:  # no display, or no tkinter at all
         raise unittest.SkipTest(f"cannot open a Tk window here: {error}")
-    root.destroy()
+
+
+def tearDownModule():
+    if _ROOT is not None:
+        _ROOT.destroy()
 
 
 class TestTimingsWindow(unittest.TestCase):
     def setUp(self):
-        import tkinter
-
         from timings_gui import TimingsWindow
 
         self.directory = tempfile.TemporaryDirectory()
@@ -36,9 +46,10 @@ class TestTimingsWindow(unittest.TestCase):
         self.path = Path(self.directory.name) / "timings.json"
         self.table = Timings(self.path, "windows")
 
-        self.root = tkinter.Tk()
+        self.root = _ROOT
+        for child in self.root.winfo_children():
+            child.destroy()
         self.root.withdraw()
-        self.addCleanup(self.root.destroy)
         self.window = TimingsWindow(self.root, self.table)
 
     def text(self, name):
@@ -104,6 +115,90 @@ class TestTimingsWindow(unittest.TestCase):
         with unittest.mock.patch("timings_gui.messagebox.showerror"):
             self.window.save()
         self.assertEqual(self.table.values, before)
+
+    # -- the value boxes are always on screen ---------------------------
+
+    # A description is a label in a grid cell, and a label in a grid is as
+    # wide as its text, so the longest description decides the width of the
+    # whole window. One long enough to ask for more pixels than the screen
+    # has gives a window Tk refuses to map, and a window that is not mapped
+    # does not draw its children: the editor opens, and the value boxes are
+    # not in it. These two put the window on screen and look at the boxes,
+    # which is what a person opening the editor would get.
+
+    def lay_out(self, specs=None):
+        """Put the window on screen and return the value boxes in it.
+
+        ``specs`` replaces the timing table the window is built from, so a
+        description far longer than any real one can be tried. They live in
+        this class rather than one of their own because a second Tk()
+        outliving another one's destroyed roots prints theme errors that
+        read like failures.
+        """
+        from tkinter import ttk
+
+        import timings_gui
+        from timings import TIMINGS
+
+        chosen = TIMINGS if specs is None else specs
+        for child in self.root.winfo_children():
+            child.destroy()
+
+        if specs is None:
+            timings_gui.TimingsWindow(self.root, self.table)
+        else:
+            with unittest.mock.patch.object(timings_gui, "TIMINGS", chosen):
+                timings_gui.TimingsWindow(self.root, self.table)
+
+        # setUp withdrew the window, and a withdrawn window lays nothing out.
+        self.root.deiconify()
+        self.root.update()
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        entries = [
+            widget
+            for widget in descendants(self.root)
+            if isinstance(widget, ttk.Entry)
+        ]
+        return entries, len(chosen)
+
+    def assert_boxes_are_editable(self, entries, expected):
+        self.assertEqual(len(entries), expected)
+        for entry in entries:
+            self.assertTrue(
+                entry.winfo_ismapped(),
+                "a value box is not on screen, so it cannot be edited",
+            )
+            self.assertGreater(
+                entry.winfo_width(), 1, "a value box was laid out with no width"
+            )
+
+    def test_every_timing_has_an_editable_value_box(self):
+        entries, expected = self.lay_out()
+        self.assert_boxes_are_editable(entries, expected)
+
+    def test_a_description_longer_than_the_screen_does_not_hide_them(self):
+        import dataclasses
+
+        from timings import TIMINGS
+
+        huge = dataclasses.replace(
+            TIMINGS[0], description="compensation for the loop latency " * 400
+        )
+        entries, expected = self.lay_out((huge, *TIMINGS[1:]))
+
+        # The symptom first: this is what the person at the keyboard sees.
+        self.assert_boxes_are_editable(entries, expected)
+        self.assertLessEqual(
+            self.root.winfo_reqwidth(),
+            self.root.winfo_screenwidth(),
+            "the window asks for more width than the screen has, so Tk will "
+            "not map it and the value boxes disappear",
+        )
 
 
 if __name__ == "__main__":
