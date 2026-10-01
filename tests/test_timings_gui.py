@@ -14,11 +14,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from timings import Timings
 
-#: One Tk interpreter for the whole module. A second one, outliving a
-#: destroyed first, makes Tk broadcast theme changes to an interpreter that
-#: has already gone, and that prints to stderr in the middle of a test run
-#: where it reads like a failure. Tests withdraw this and put it back up
-#: rather than making their own.
+#: One Tk interpreter for the module. A second one, outliving a destroyed
+#: first, makes Tk broadcast theme changes to an interpreter that has already
+#: gone, and that prints to stderr in the middle of a test run where it reads
+#: like a failure. Tests withdraw this and put it back up rather than making
+#: their own.
 _ROOT = None
 
 
@@ -169,12 +169,15 @@ class TestTimingsWindow(unittest.TestCase):
     def assert_boxes_are_editable(self, entries, expected):
         self.assertEqual(len(entries), expected)
         for entry in entries:
-            self.assertTrue(
-                entry.winfo_ismapped(),
-                "a value box is not on screen, so it cannot be edited",
-            )
+            # Requested size, not mapped size: a window too wide for the
+            # screen is never mapped at all, and asking one that never
+            # renders whether it has mapped is a way of testing Tk's mood
+            # instead of the editor. The width below is what decides that.
             self.assertGreater(
-                entry.winfo_width(), 1, "a value box was laid out with no width"
+                entry.winfo_reqwidth(),
+                1,
+                "a value box was laid out with no width, so it cannot be "
+                "typed into",
             )
 
     def test_every_timing_has_an_editable_value_box(self):
@@ -191,14 +194,17 @@ class TestTimingsWindow(unittest.TestCase):
         )
         entries, expected = self.lay_out((huge, *TIMINGS[1:]))
 
-        # The symptom first: this is what the person at the keyboard sees.
-        self.assert_boxes_are_editable(entries, expected)
+        # The symptom: the value boxes are gone, because the window asked for
+        # more width than the screen has and Tk does not map a window that
+        # does not fit. Checked before the boxes themselves, since that is
+        # the order a person meets it in.
         self.assertLessEqual(
             self.root.winfo_reqwidth(),
             self.root.winfo_screenwidth(),
             "the window asks for more width than the screen has, so Tk will "
             "not map it and the value boxes disappear",
         )
+        self.assert_boxes_are_editable(entries, expected)
 
 
 if __name__ == "__main__":

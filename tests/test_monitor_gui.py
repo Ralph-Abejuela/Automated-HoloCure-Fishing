@@ -19,6 +19,8 @@ from pathlib import Path
 
 import numpy as np
 
+from monitor_gui import CAPTURE_FOLDER
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -193,8 +195,14 @@ class TestFishingLoopReporting(LoopHarness):
 
         telemetry = Telemetry()
         platform = FakePlatform(fishing_capture)
+        # Wait for the iterations themselves, not for a keypress: the stop
+        # arrives between iterations, so a keypress can be seen with only one
+        # iteration behind it and the count below would be a coin toss.
         snapshot = self.run_loop(
-            fishing_mode, platform, telemetry, until=lambda s: len(s["keypresses"]) >= 1
+            fishing_mode,
+            platform,
+            telemetry,
+            until=lambda s: len(s["durations"]) >= 3 and len(s["keypresses"]) >= 1,
         )
 
         frame = snapshot["frame"]
@@ -412,6 +420,81 @@ class TestMonitorWindow(unittest.TestCase):
             self.telemetry.loop_done(0.01)
         self.window.refresh()
         self.assertEqual(self.window.values["rate"].get(), "100.0 /s")
+
+    # -- debug captures -------------------------------------------------
+
+    def saved_captures(self):
+        return sorted(path.name for path in CAPTURE_FOLDER.glob("*.png"))
+
+    def _clear_captures(self):
+        if CAPTURE_FOLDER.exists():
+            for path in CAPTURE_FOLDER.glob("*.png"):
+                path.unlink()
+
+    def test_nothing_is_captured_until_it_is_asked_for(self):
+        self._clear_captures()
+        self.addCleanup(self._clear_captures)
+
+        self.telemetry.key("space", "rhythm arrow 'space' matched")
+        self.window.refresh()
+        self.assertEqual(self.saved_captures(), [], "off by default")
+
+    def test_each_press_saves_a_pair_named_after_that_press(self):
+        self._clear_captures()
+        self.addCleanup(self._clear_captures)
+
+        self.window.capture_on_press.set(True)
+        self.window.set_capture_state()
+        self.assertIn("capturing", self.window.capture_status.get())
+
+        self.telemetry.key("space", "rhythm arrow 'space' matched")
+        self.window.refresh()
+        self.window.refresh()  # the follow-up frame
+
+        self.telemetry.key("enter", "dismissing the prompt 1 of 3")
+        self.window.refresh()
+        self.window.refresh()
+
+        self.assertEqual(
+            self.saved_captures(),
+            [
+                "0000_space_a.png",
+                "0001_space_b.png",
+                "0002_enter_a.png",
+                "0003_enter_b.png",
+            ],
+        )
+
+    def test_the_capture_region_is_scaled_like_the_bot_ones(self):
+        import cv2
+
+        self._clear_captures()
+        self.addCleanup(self._clear_captures)
+
+        self.window.capture_on_press.set(True)
+        self.window.capture_region.set("Full window")
+        self.telemetry.update(state="running", mode="fishing", scale=2, loop=1)
+        self.telemetry.key("space", "rhythm arrow 'space' matched")
+        self.window.refresh()
+
+        frame = cv2.imread(str(CAPTURE_FOLDER / self.saved_captures()[0]))
+        # the full window is 640x360 in base coordinates, doubled on a 720p one
+        self.assertEqual((frame.shape[1], frame.shape[0]), (1280, 720))
+
+    def test_a_capture_that_fails_says_so_rather_than_raising(self):
+        self._clear_captures()
+        self.addCleanup(self._clear_captures)
+
+        self.window.capture_on_press.set(True)
+
+        def broken(roi):
+            raise OSError("the window went away")
+
+        self.window.platform.holocure_screenshot = broken
+        self.telemetry.key("space", "rhythm arrow 'space' matched")
+        self.window.refresh()  # must not raise
+        self.assertIn("capture failed", self.window.capture_status.get())
+        self.assertEqual(self.saved_captures(), [])
 
     def test_matches_are_listed_with_their_scores_and_threshold(self):
         from telemetry import Match

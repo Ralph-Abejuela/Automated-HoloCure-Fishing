@@ -51,6 +51,18 @@ LOG_LINES = 400
 #: How long a close waits for the worker thread before giving up on it.
 SHUTDOWN_GRACE = 5.0
 
+#: Debug capture regions, in the same 360p base coordinates the loops use,
+#: so what is saved lines up with what the bot is looking at.
+CAPTURE_REGIONS = {
+    "Note area": (276, 242, 133, 38),
+    "Bottom third": (0, 240, 640, 120),
+    "Bottom half": (0, 180, 640, 180),
+    "Full window": (0, 0, 640, 360),
+}
+
+#: Where the debug captures go, next to this script.
+CAPTURE_FOLDER = Path(__file__).resolve().parent / "debug_captures"
+
 MONITOR_BACKGROUND = "#141418"
 COLOUR_MATCH = "#3ddc84"
 COLOUR_MISS = "#888888"
@@ -125,6 +137,11 @@ class MonitorWindow:
         self._keys_generation = None
         self._log_generation = None
         self._photo = None
+        # debug capture state: see _build_debug_tools
+        self._capture_seq = 0
+        self._burst = 0
+        self._last_scale = 1
+        self._newest_press = None
 
         master.title("HoloCure monitor")
         master.minsize(940, 620)
@@ -170,6 +187,80 @@ class MonitorWindow:
             variable=self.log_keys,
             command=self.set_log_keypresses,
         ).pack(side="left")
+        self._build_debug_tools(bar)
+
+    def _build_debug_tools(self, bar) -> None:
+        """Grabs a frame every time the loop presses something.
+
+        The keypress log already knows when the bot pressed and why, so the
+        only thing missing to judge a press is what the game thought of it.
+        The grade it shows afterwards lives on screen for a moment, so this
+        saves the frames either side of the press and lets them be read
+        later, against the log.
+
+        Off by default, and self contained: nothing here changes what the
+        loop does, and dropping the branch loses all of it.
+        """
+        debug = ttk.LabelFrame(bar, text="Capture", padding=(6, 2))
+        debug.pack(side="left", padx=(12, 0))
+
+        self.capture_on_press = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            debug,
+            text="Save frames on keypress",
+            variable=self.capture_on_press,
+            command=self.set_capture_state,
+        ).pack(side="left")
+
+        ttk.Label(debug, text="Region").pack(side="left", padx=(8, 0))
+        self.capture_region = tk.StringVar(value="Bottom half")
+        chooser = ttk.Combobox(
+            debug,
+            textvariable=self.capture_region,
+            values=tuple(CAPTURE_REGIONS),
+            state="readonly",
+            width=13,
+        )
+        chooser.pack(side="left", padx=4)
+
+        ttk.Button(debug, text="Save one", command=self.capture_now).pack(side="left")
+        self.capture_status = tk.StringVar(value=CAPTURE_FOLDER.name)
+        ttk.Label(debug, textvariable=self.capture_status, foreground="#666666").pack(
+            side="left", padx=(8, 0)
+        )
+
+    def set_capture_state(self) -> None:
+        """Note whether captures are wanted, and say where they land."""
+        self._burst = 0
+        if self.capture_on_press.get():
+            self.capture_status.set(f"capturing to {CAPTURE_FOLDER.name}/")
+        else:
+            self.capture_status.set(CAPTURE_FOLDER.name)
+
+    def _capture(self, label: str) -> Optional[Path]:
+        """Save one frame of the chosen region, and say so on failure."""
+        base = CAPTURE_REGIONS[self.capture_region.get()]
+        scale = round(self._last_scale or 1)
+        roi = tuple(int(value) for value in np.multiply(scale, base))
+        try:
+            frame = self.platform.holocure_screenshot(roi)
+        except Exception as error:  # the game closing mid-capture is normal
+            self.capture_status.set(f"capture failed: {error}")
+            return None
+        if frame is None:
+            self.capture_status.set("capture came back empty")
+            return None
+        CAPTURE_FOLDER.mkdir(exist_ok=True)
+        path = CAPTURE_FOLDER / f"{self._capture_seq:04d}_{label}.png"
+        self._capture_seq += 1
+        cv2.imwrite(str(path), frame)
+        return path
+
+    def capture_now(self) -> None:
+        path = self._capture("manual")
+        self.capture_status.set(
+            f"saved {path.name}" if path else "capture failed"
+        )
 
     def _build_body(self) -> None:
         body = ttk.Panedwindow(self.master, orient="horizontal")
@@ -458,6 +549,7 @@ class MonitorWindow:
         frame = snapshot["frame"]
         self._refresh_stats(frame, snapshot)
         self._refresh_image(frame)
+        self._debug_after_refresh(frame, snapshot)
         self._refresh_graph(snapshot["durations"])
         self._refresh_matches(frame)
         self._refresh_keypresses(snapshot)
@@ -470,6 +562,35 @@ class MonitorWindow:
             self._set_running(False)
 
         self._schedule()
+
+    def _debug_after_refresh(self, frame, snapshot: dict) -> None:
+        """If capturing is on, save a frame or two for each new keypress.
+
+        The keypress list is the same one the Keypresses tab is built from,
+        so a capture and its row always agree on what was pressed and why.
+        Two frames per press, one on the refresh that saw the press and one
+        on the next, because the grade the game shows arrives just after the
+        key goes down.
+        """
+        if not self.capture_on_press.get():
+            return
+        self._last_scale = frame.scale or 1
+        press = snapshot["keypresses"][-1] if snapshot["keypresses"] else None
+        if press is None:
+            return
+        if press is not self._newest_press:
+            # a new press, so start its pair
+            self._newest_press = press
+            self._burst = 1
+            self._capture_for_press(press)
+        elif self._burst == 1:
+            # same press as last time, so this is its follow-up
+            self._burst = 2
+            self._capture_for_press(press)
+
+    def _capture_for_press(self, press) -> None:
+        label = str(press.key).replace("/", "_")[:12] or "key"
+        self._capture(f"{label}_{'a' if self._burst == 1 else 'b'}")
 
     def _refresh_stats(self, frame, snapshot: dict) -> None:
         durations = snapshot["durations"]
