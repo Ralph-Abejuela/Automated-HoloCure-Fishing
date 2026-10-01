@@ -140,6 +140,7 @@ class TestFishingLoopReporting(LoopHarness):
             "fishing_key_delay",
             "fishing_ok_gap",
             "fishing_loop_interval",
+            "press_jitter",
             "keypress_gap",
         ):
             self.settings[name] = 0
@@ -264,7 +265,7 @@ class TestMiningLoopReporting(LoopHarness):
         from timings import Timings
 
         self.settings = Timings(read_file=False, platform="windows")
-        for name in ("mining_enter_delay", "mining_ok_gap", "keypress_gap"):
+        for name in ("mining_enter_delay", "mining_ok_gap", "press_jitter", "keypress_gap"):
             self.settings[name] = 0
 
     def test_the_red_bar_becomes_a_pointer_scan_and_a_prompt_becomes_keys(self):

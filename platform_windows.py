@@ -116,9 +116,6 @@ class Windows(Platform):
         time.sleep(self.timing("keypress_gap"))
         self.window.SendMessage(win32con.WM_KEYUP, keycodes[key], 0)
 
-    def offset(self, fish_count):
-        return 0
-
 
 def capture_game(hwnd, left: int, top: int, width: int, height: int):
     """Get a screenshot of the given window.

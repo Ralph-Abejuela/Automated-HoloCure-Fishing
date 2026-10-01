@@ -98,16 +98,30 @@ TIMINGS = (
         maximum=5.0,
     ),
     TimingSpec(
+        "press_jitter",
+        KIND_DELAY,
+        0.02,
+        "Extra random wait before each keypress, drawn evenly from zero up "
+        "to this, so it adds half of it on average. A person never hits the "
+        "same spot twice, and a bot that always presses at exactly the same "
+        "point sits on the edge of the window the game accepts, where any "
+        "timing bias eats the margin instead of averaging out. 0 turns it off.",
+        maximum=0.5,
+    ),
+    TimingSpec(
         "fishing_ok_gap",
         KIND_DELAY,
-        0.01,
-        "Wait between the Enter presses that dismiss the fishing prompt.",
+        0.14,
+        "Wait between the Enter presses that dismiss the fishing prompt. "
+        "HoloCure ignores presses made during its own short cooldown after a "
+        "press, so firing a burst of them together wastes most of them: "
+        "spreading them out is what makes them count.",
         maximum=5.0,
     ),
     TimingSpec(
         "fishing_ok_presses",
         KIND_COUNT,
-        6,
+        3,
         "How many times Enter is pressed to dismiss the fishing prompt.",
         minimum=1,
         maximum=20,

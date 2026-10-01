@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import sys
 import time
 from math import floor
@@ -52,6 +53,23 @@ def load_timings(path=None, overrides=None, platform_name=None) -> Timings:
             )
         settings[name] = parse_value(SPECS[name], value)
     return settings
+
+
+def human_pause(settings: Timings) -> None:
+    """Pause for a random moment before the next key goes down.
+
+    Human motor timing is not metronomic: repeated presses land about
+    100-150ms apart, with a spread of roughly a tenth of that, and nobody
+    hits the identical spot twice in a row. A bot that always presses the
+    instant it sees a note sits on one edge of the window the game accepts,
+    so a bias in the timing eats into the margin instead of averaging out.
+
+    The wait is drawn evenly from zero up to ``press_jitter``, which adds
+    half of that on average. Set the timing to 0 for perfectly even timing.
+    """
+    jitter = settings["press_jitter"]
+    if jitter > 0:
+        time.sleep(random.uniform(0.0, jitter))
 
 
 def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> None:
@@ -162,6 +180,7 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 dots.append(
                     Dot(window_x + min_loc[0], h_offset + min_loc[1], ARROW_COLOR, key)
                 )
+                human_pause(settings)
                 platform.press_key(keybinds[key])
                 telemetry.key(keybinds[key], f"rhythm arrow '{key}' matched")
                 time.sleep(settings["fishing_key_delay"])
@@ -188,6 +207,7 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 telemetry.key(
                     "enter", f"dismissing the prompt {press} of {presses}"
                 )
+                human_pause(settings)
                 platform.press_key("enter")
                 time.sleep(settings["fishing_ok_gap"])
             counter += 1
@@ -367,6 +387,7 @@ def pick_axe_mode(platform, settings: Timings, telemetry: Telemetry = None) -> N
                         "pointer",
                     )
                 )
+                human_pause(settings)
                 platform.press_key("enter")
                 telemetry.key("enter", "pointer matched, swung the axe")
                 time.sleep(settings["mining_enter_delay"])
@@ -394,6 +415,7 @@ def pick_axe_mode(platform, settings: Timings, telemetry: Telemetry = None) -> N
                 telemetry.key(
                     "enter", f"dismissing the prompt {press} of {presses}"
                 )
+                human_pause(settings)
                 platform.press_key("enter")
                 time.sleep(settings["mining_ok_gap"])
             counter += 1

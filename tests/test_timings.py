@@ -133,7 +133,7 @@ class TestTimings(unittest.TestCase):
         self.path.write_text(json.dumps({"mining_enter_delay": 0.5}), encoding="utf-8")
         table = Timings(self.path, "windows")
         self.assertEqual(table["mining_enter_delay"], 0.5)
-        self.assertEqual(table["fishing_ok_presses"], 6)
+        self.assertEqual(table["fishing_ok_presses"], 3)
 
     def test_invalid_json_is_reported(self):
         self.path.write_text("{nope", encoding="utf-8")
@@ -212,7 +212,7 @@ class TestTimings(unittest.TestCase):
 
 class TestFormatValue(unittest.TestCase):
     def test_delays_are_shown_in_milliseconds(self):
-        self.assertEqual(timings.format_value(timings.SPECS["fishing_ok_gap"], 0.01), "10")
+        self.assertEqual(timings.format_value(timings.SPECS["fishing_ok_gap"], 0.14), "140")
         self.assertEqual(timings.format_value(timings.SPECS["mining_enter_delay"], 0.35), "350")
 
     def test_counts_have_no_unit(self):

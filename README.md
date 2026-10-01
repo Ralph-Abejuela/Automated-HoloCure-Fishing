@@ -107,8 +107,9 @@ save something, and until then the built-in defaults are used.
 | `window_search_interval` | 1000ms | Wait between searches for the HoloCure window while it is closed. |
 | `config_poll_interval` | 1000ms | How often HoloCure's settings.json is re-read for keybinds. |
 | `fishing_key_delay` | 50ms | Wait after pressing a rhythm-game arrow. |
-| `fishing_ok_gap` | 10ms | Wait between the Enter presses that dismiss the fishing prompt. |
-| `fishing_ok_presses` | 6 | How many times Enter is pressed to dismiss the fishing prompt. |
+| `press_jitter` | 20ms | Extra random wait before each keypress, up to this much. 0 turns it off. |
+| `fishing_ok_gap` | 140ms | Wait between the Enter presses that dismiss the fishing prompt. |
+| `fishing_ok_presses` | 3 | How many times Enter is pressed to dismiss the fishing prompt. |
 | `fishing_loop_interval` | 10ms | Target duration of one fishing loop, which caps it at 100 Hz. |
 | `mining_enter_delay` | 400ms | Wait after pressing Enter on the mining pointer. |
 | `mining_ok_gap` | 10ms | Wait between the Enter presses that dismiss the mining prompt. |

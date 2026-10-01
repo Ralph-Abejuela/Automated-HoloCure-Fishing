@@ -1,9 +1,18 @@
+import math
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Tuple
 from numpy import ndarray
 
 import timings
 from timings import Timings, default_timings
+
+#: How far left the note search window has to have moved by the time the game
+#: is at its top speed. See Platform.offset for why it moves at all.
+OFFSET_AT_MAX_SPEED = 15
+
+#: The chain at which the game stops getting faster. HoloCure raises the note
+#: speed by one level every 10 fish, and caps the level at 7.
+CHAIN_AT_MAX_SPEED = 70
 
 
 class Platform(ABC):
@@ -95,18 +104,33 @@ class Platform(ABC):
         """
         pass
 
-    @abstractmethod
     def offset(self, fish_count: int) -> int:
-        """Specify the offset from the main circle when we should hit the key.
+        """Where the note search window has to move to, given the chain.
 
-        Parameters
-        ----------
-        fish_count : int,
+        The notes slide left to right towards a target circle, and the bot
+        presses as soon as one reaches the window it is watching. That press
+        never lands instantly: the loop was already part way through a poll
+        when the note turned up, then the key has to go down and the game has
+        to see it. Call that whole pipeline the latency.
 
-        Returns
-        -------
-        An int, the offset in pixels, right is positive
+        A slow note spends the latency covering few pixels, so a fixed window
+        works. A fast one covers a lot more, and the same press lands that
+        much further past the circle than it should, until it falls outside
+        the window the game accepts. So the search has to start earlier, by
+        however far a note travels during the latency, and the further the
+        game speeds up the more that is.
+
+        HoloCure raises the note speed by one level every 10 fish caught in a
+        row and caps it at 7 levels, which it reaches at a chain of 70. This
+        returns the compensation in pixels, growing with the chain and
+        stopping there: 0 at the start of a chain, and 15 pixels to the left
+        at the cap.
+
+        The 15 is measured, not derived, because the latency belongs to the
+        machine, its loop rate and its timing settings, not to the game. If
+        the notes start being missed, this is the number to widen.
         """
-        pass
-  
+        reached = min(fish_count, CHAIN_AT_MAX_SPEED)
+        return math.floor(-OFFSET_AT_MAX_SPEED * reached / CHAIN_AT_MAX_SPEED)
+
 
