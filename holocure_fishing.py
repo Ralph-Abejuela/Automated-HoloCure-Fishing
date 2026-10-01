@@ -61,6 +61,18 @@ GRADE_BOX = (
 #: rather than guessed at.
 GRADE_TRIES = 2
 
+#: The middle of the target circle, in the same coordinates as the note
+#: capture. Measured off the ring: it is a clean circle from x 101 to x 132,
+#: in the same place in every frame, so this is the point a note has to reach
+#: for the press to count as neither early nor late.
+CIRCLE_X = 116.5
+
+#: How close to the circle a press has to land, in pixels, to be called on
+#: time. At the top speed a note crosses about this much between one loop
+#: iteration and the next, so anything nearer than this is the loop's
+#: resolution rather than a real miss.
+ON_TIME_PIXELS = 1.5
+
 #: Colours the monitor window draws on, in RGB.
 ARROW_COLOR = (0, 200, 255)
 OK_COLOR = (255, 96, 96)
@@ -277,6 +289,13 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 human_pause(settings)
                 platform.press_key(keybinds[key])
                 telemetry.key(keybinds[key], f"rhythm arrow '{key}' matched")
+                # Where the note was when the key went down, against the
+                # circle it was meant to be on. The game only says OK for both
+                # early and late, so this is the only thing that can tell
+                # them apart: negative is early, the note had not got there.
+                note_centre = window_x + min_loc[0] + w / 2
+                early_by = note_centre - CIRCLE_X
+                telemetry.timing(telemetry.current_loop(), early_by)
                 # ask again next iteration, once the game has had a moment to
                 # say what it made of this one
                 pending_press = (telemetry.current_loop(), keybinds[key], 0)

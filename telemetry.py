@@ -206,6 +206,9 @@ class Telemetry:
         self._log = _Stream(LOG_HISTORY)
         self._durations: deque = deque(maxlen=DURATION_HISTORY)
         self._grades: Dict[int, str] = {}
+        #: How far early or late each press was, in pixels, by the loop it was
+        #: made on. Empty until a press is made.
+        self._timing: Dict[int, float] = {}
         self._started = time.time()
         self._timings: Dict[str, float] = {}
         self._timings_path = ""
@@ -241,6 +244,7 @@ class Telemetry:
                 "timings": dict(self._timings),
                 "timings_path": self._timings_path,
                 "grades": dict(self._grades),
+                "timing": dict(self._timing),
                 "error": self._error,
                 "stopping": self._stop.is_set(),
             }
@@ -266,6 +270,7 @@ class Telemetry:
             self._log.clear()
             self._durations.clear()
             self._grades.clear()
+            self._timing.clear()
 
     def set_state(self, state: str, message: str = "") -> None:
         """Record what the loop is doing, and optionally why."""
@@ -338,6 +343,19 @@ class Telemetry:
             if len(self._grades) > KEYPRESS_HISTORY:
                 for stale in sorted(self._grades)[: len(self._grades) - KEYPRESS_HISTORY]:
                     del self._grades[stale]
+
+    def timing(self, loop: int, pixels: float) -> None:
+        """Record how far early or late a press was, in pixels.
+
+        Negative is early: the note had not reached the circle yet. Positive
+        is late: it had gone past. This is the loop's own measurement of
+        where the note was, not the game's word, which only ever says OK.
+        """
+        with self._lock:
+            self._timing[loop] = pixels
+            if len(self._timing) > KEYPRESS_HISTORY:
+                for stale in sorted(self._timing)[: len(self._timing) - KEYPRESS_HISTORY]:
+                    del self._timing[stale]
 
     def clear_log(self) -> None:
         """Empty the activity log, so a window can start its log view over."""

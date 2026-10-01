@@ -75,6 +75,11 @@ LEVEL_COLOURS = {"error": COLOUR_ERROR, "good": COLOUR_GOOD}
 #: early or late, BAD is a miss.
 GRADE_COLOURS = {"GOOD": COLOUR_GOOD, "OK": "#e3b341", "BAD": COLOUR_ERROR}
 
+#: How close to the circle a press has to land, in pixels, to be shown as on
+#: time. At the top speed a note crosses about this much in one loop
+#: iteration, so anything nearer is the loop's resolution, not a real miss.
+ON_TIME_PIXELS = 1.5
+
 
 def bgr(colour) -> tuple:
     """Turn the RGB a :class:`telemetry.Rect` carries into OpenCV's BGR."""
@@ -337,6 +342,7 @@ class MonitorWindow:
             ("sleep_ms", "Sleeping"),
             ("press_gap", "Press cadence"),
             ("grades", "Grades"),
+            ("bias", "Press bias"),
             ("panel", "Game panel"),
             ("offset", "Note offset"),
             ("counter", "Fished / mined"),
@@ -386,14 +392,18 @@ class MonitorWindow:
         tab = ttk.Frame(self.tabs, padding=(8, 8))
         self.tabs.add(tab, text="Keypresses")
         self.key_tree = ttk.Treeview(
-            tab, columns=("time", "loop", "key", "grade", "why"), show="headings", height=10
+            tab,
+            columns=("time", "loop", "key", "grade", "timing", "why"),
+            show="headings",
+            height=10,
         )
         for column, title, width, anchor in (
             ("time", "Time", 80, "w"),
             ("loop", "Loop", 60, "e"),
             ("key", "Key", 60, "w"),
             ("grade", "Grade", 60, "e"),
-            ("why", "What asked for it", 200, "w"),
+            ("timing", "Early or late", 90, "e"),
+            ("why", "What asked for it", 190, "w"),
         ):
             self.key_tree.heading(column, text=title)
             self.key_tree.column(column, width=width, anchor=anchor)
@@ -627,6 +637,7 @@ class MonitorWindow:
         self.values["sleep_ms"].set(f"{frame.sleep_ms:.2f} ms")
         self.values["press_gap"].set(self._press_cadence(snapshot))
         self.values["grades"].set(self._grade_text(frame))
+        self.values["bias"].set(self._bias_text(snapshot))
         self.values["panel"].set(self._panel_text(frame))
         self.values["offset"].set(self._offset_text(frame))
         self.values["counter"].set(str(frame.counter))
@@ -668,6 +679,41 @@ class MonitorWindow:
             f"{gap:.1f} ms between the last two{jitter_text}, "
             f"{age:.0f} ms since {latest.key!r}"
         )
+
+    def _bias_text(self, snapshot: dict) -> str:
+        """The average of the recent presses, which is what the offset is for.
+
+        A bot that is consistently a couple of pixels early is telling you the
+        search window is a couple of pixels too far right, and the average is
+        the number to move it by. A mean near zero with a wide spread is a
+        different problem: the presses are scattered rather than shifted, and
+        widening the window would help more than moving it.
+        """
+        recent = list(snapshot.get("timing", {}).values())[-60:]
+        if not recent:
+            return "no presses measured yet"
+        mean = sum(recent) / len(recent)
+        spread = (max(recent) - min(recent)) / 2
+        if abs(mean) <= ON_TIME_PIXELS:
+            return f"{mean:+.1f} px on average, within {spread:.0f} px either way"
+        direction = "early" if mean < 0 else "late"
+        return f"{abs(mean):.1f} px {direction} on average, {spread:.0f} px either way"
+
+    def _timing_text(self, pixels) -> str:
+        """How far early or late a press was, in pixels of the note's travel.
+
+        The game writes OK for both, so this is the only thing that can tell
+        them apart. It is the loop's own measurement of where the note was
+        when the key went down, against where the circle is, so it is an
+        estimate of the same thing the game is grading.
+        """
+        if pixels is None:
+            return ""
+        if pixels < -ON_TIME_PIXELS:
+            return f"{abs(pixels):.0f} px early"
+        if pixels > ON_TIME_PIXELS:
+            return f"{pixels:.0f} px late"
+        return "on time"
 
     def _grade_text(self, frame) -> str:
         """How the game has graded the presses, which is the only honest score.
@@ -788,6 +834,7 @@ class MonitorWindow:
         if self._next_keypress < first:
             self._next_keypress = first
         grades = snapshot.get("grades", {})
+        timing = snapshot.get("timing", {})
         for press in snapshot["keypresses"][self._next_keypress - first :]:
             item = tree.insert(
                 "",
@@ -797,6 +844,7 @@ class MonitorWindow:
                     f"{press.loop:,}",
                     press.key,
                     grades.get(press.loop, ""),
+                    self._timing_text(timing.get(press.loop)),
                     press.reason,
                 ),
             )
