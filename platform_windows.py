@@ -75,7 +75,12 @@ class Windows(Platform):
             if hwndMain != 0:
                 break
 
-            time.sleep(1)
+            # the monitor window's stop button, which cannot wait a whole
+            # search interval on every check
+            if self.stopping():
+                return
+
+            time.sleep(self.timing("window_search_interval"))
 
         self.handle = hwndMain
         self.window = win32ui.CreateWindowFromHandle(hwndMain)
@@ -108,11 +113,8 @@ class Windows(Platform):
             return
 
         self.window.SendMessage(win32con.WM_KEYDOWN, keycodes[key], 0)
-        time.sleep(0.015)
+        time.sleep(self.timing("keypress_gap"))
         self.window.SendMessage(win32con.WM_KEYUP, keycodes[key], 0)
-
-    def offset(self, fish_count):
-        return 0
 
 
 def capture_game(hwnd, left: int, top: int, width: int, height: int):

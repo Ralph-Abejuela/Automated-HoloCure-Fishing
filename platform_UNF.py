@@ -1,9 +1,40 @@
+import math
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from numpy import ndarray
+
+import note_offset
+import timings
+from note_offset import CHAIN_AT_MAX_SPEED, MAX_SPEED_LEVEL, OFFSET_AT_MAX_SPEED
+from timings import Timings, default_timings
+
+__all__ = [
+    "CHAIN_AT_MAX_SPEED",
+    "MAX_SPEED_LEVEL",
+    "OFFSET_AT_MAX_SPEED",
+    "Platform",
+]
 
 
 class Platform(ABC):
+
+    #: Installed by main() so press_key() and friends can read the timings
+    #: the user configured. Left None, they fall back to the built-in
+    #: defaults for the running platform.
+    timings: Optional[Timings] = None
+
+    #: Installed by the monitor window so waiting for the game can be
+    #: interrupted. Left None, which is the console run, it never stops.
+    stop_check: Optional[Callable[[], bool]] = None
+
+    def stopping(self) -> bool:
+        """True when someone has asked the game loops to finish."""
+        return self.stop_check is not None and self.stop_check()
+
+    def timing(self, name: str) -> float:
+        """Return the configured value of a timing, or its default."""
+        source = self.timings if self.timings is not None else default_timings()
+        return source[name]
 
     @abstractmethod
     def wait_until_application_handle(self):
@@ -74,18 +105,21 @@ class Platform(ABC):
         """
         pass
 
-    @abstractmethod
-    def offset(self, fish_count: int) -> int:
-        """Specify the offset from the main circle when we should hit the key.
+    def offset(self, fish_count: int, speed_level: Optional[int] = None) -> int:
+        """The starting guess for where the note search window should sit.
 
-        Parameters
-        ----------
-        fish_count : int,
+        This is a fixed table, worked out once for one machine and applied to
+        every machine. :class:`note_offset.OffsetLearner` is what the game loop
+        actually uses now: it starts from this and moves the window by however
+        far the presses are landing off, which is a measurement of the thing
+        this guesses at. Kept as the seed, and as the answer for a level that
+        has not been played yet.
 
-        Returns
-        -------
-        An int, the offset in pixels, right is positive
+        See :mod:`note_offset` for how the window is worked out, and
+        :meth:`Platform.offset` history in the log for why it moves at all: a
+        press is never instant, and the faster the note the further past the
+        circle the same delay carries it.
         """
-        pass
-  
+        return note_offset.seed_offset(speed_level, fish_count)
+
 

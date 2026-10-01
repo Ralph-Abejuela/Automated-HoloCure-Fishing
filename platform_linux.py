@@ -1,4 +1,3 @@
-import math
 import re
 import subprocess
 import time
@@ -81,6 +80,8 @@ class Linux(Platform):
         # So assume the window will be valid indefinitely.
         if self._window:
             return
+        if self.stopping():
+            return
 
         # The actual visible Holocure window might be nested in any number of parent windows depending on the
         # compositor. We henceforth have to search recursively.
@@ -123,7 +124,7 @@ class Linux(Platform):
         disp.sync()
 
         # we need to wait at least a frame between press and release to make sure holocure picks up the input
-        time.sleep(0.03)
+        time.sleep(self.timing("keypress_gap"))
 
         event = protocol.event.KeyRelease(
             time=X.CurrentTime,
@@ -154,7 +155,3 @@ class Linux(Platform):
             return None
 
         return ok_path
-
-    def offset(self, fish_count):
-        # 0 pixels at 0 fish, -15 pixels at speed 7
-        return math.floor(-15 * min(fish_count, 70) / 70)

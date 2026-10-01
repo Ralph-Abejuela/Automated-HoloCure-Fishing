@@ -1,8 +1,10 @@
 debug/
 .venv/
 __pypackages__/
+timings.json
 __pycache__/
 .idea/*
 holocure_fishing.*/
 holocure_fishing.exe
 *.zip
+debug_captures/
