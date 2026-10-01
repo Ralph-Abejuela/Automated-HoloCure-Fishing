@@ -75,7 +75,7 @@ class Windows(Platform):
             if hwndMain != 0:
                 break
 
-            time.sleep(1)
+            time.sleep(self.timing("window_search_interval"))
 
         self.handle = hwndMain
         self.window = win32ui.CreateWindowFromHandle(hwndMain)
@@ -108,7 +108,7 @@ class Windows(Platform):
             return
 
         self.window.SendMessage(win32con.WM_KEYDOWN, keycodes[key], 0)
-        time.sleep(0.015)
+        time.sleep(self.timing("keypress_gap"))
         self.window.SendMessage(win32con.WM_KEYUP, keycodes[key], 0)
 
     def offset(self, fish_count):

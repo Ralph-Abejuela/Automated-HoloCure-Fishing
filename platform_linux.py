@@ -123,7 +123,7 @@ class Linux(Platform):
         disp.sync()
 
         # we need to wait at least a frame between press and release to make sure holocure picks up the input
-        time.sleep(0.03)
+        time.sleep(self.timing("keypress_gap"))
 
         event = protocol.event.KeyRelease(
             time=X.CurrentTime,

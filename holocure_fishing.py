@@ -1,3 +1,4 @@
+import argparse
 import json
 import sys
 import time
@@ -6,9 +7,26 @@ from math import floor
 import cv2
 import numpy as np
 from imgproc import templates, masks
+from timings import TimingError, Timings, SPECS, parse_value
 DEBUG = False
 
-def fishing_mode(platform) -> None:
+
+def load_timings(path=None, overrides=None, platform_name=None) -> Timings:
+    """Build the timing table, reporting a bad file or override as CLI text."""
+    settings = Timings(path=path, platform=platform_name)
+    for item in overrides or []:
+        name, separator, value = item.partition("=")
+        name = name.strip()
+        if not separator or name not in SPECS:
+            raise SystemExit(
+                f"Error: --set wants NAME=VALUE for a known timing, got {item!r}.\n"
+                f"Known timings: {', '.join(SPECS)}"
+            )
+        settings[name] = parse_value(SPECS[name], value)
+    return settings
+
+
+def fishing_mode(platform, settings: Timings) -> None:
     # first time config load, but we check every second to see if it's changed
     keybinds = get_config(platform.config_file_path())
     one_second_timer = time.perf_counter()
@@ -21,8 +39,10 @@ def fishing_mode(platform) -> None:
         #   2. Use OpenCV template matching to check which button to press
         #   3. Send the inputs to the game
         last_time = time.perf_counter()
+        # pick up timings edited by the GUI or CLI while we run
+        settings.reload_if_changed()
         # update the config once a second :)
-        if last_time - one_second_timer > 1:
+        if last_time - one_second_timer > settings["config_poll_interval"]:
             keybinds = get_config(platform.config_file_path())
             one_second_timer = last_time
         # find the window every loop - a bit ugly, but we can handle the game
@@ -68,7 +88,7 @@ def fishing_mode(platform) -> None:
             # arbitrary magic number, gets stuck if mouse hovering over button
             if min_val < 1000:
                 platform.press_key(keybinds[key])
-                time.sleep(0.2)
+                time.sleep(settings["fishing_key_delay"])
                 break
 
         # look for "ok" button and press enter if so
@@ -82,17 +102,9 @@ def fishing_mode(platform) -> None:
         min_val, _, _, _ = cv2.minMaxLoc(res)
         # arbitrary magic number, handles the mouse hovering over the OK button
         if min_val < 60_000_000:
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
+            for _ in range(settings["fishing_ok_presses"]):
+                platform.press_key("enter")
+                time.sleep(settings["fishing_ok_gap"])
             counter += 1
             print("Fishing count: ", counter)
 
@@ -103,9 +115,10 @@ def fishing_mode(platform) -> None:
             print(f"FPS: {round(fps, 2):06.2f}" + "-" * round(fps / 10))
             cv2.waitKey(1)
 
-        # slow the loop down to 100Hz max
-        if elapsed < 0.01:
-            time.sleep(0.01 - elapsed)
+        # slow the loop down to fishing_loop_interval (100Hz by default)
+        loop_interval = settings["fishing_loop_interval"]
+        if elapsed < loop_interval:
+            time.sleep(loop_interval - elapsed)
 def check_red_area(img_src):
         area_start_x = 0
         area_end_x = 0
@@ -122,7 +135,7 @@ def check_red_area(img_src):
                     t__ = True
                 area_end_x += 1
         return area_start_x, area_end_x
-def pick_axe_mode(platform) -> None:
+def pick_axe_mode(platform, settings: Timings) -> None:
     # first time config load, but we check every second to see if it's changed  
     keybinds = get_config(platform.config_file_path())
     one_second_timer = time.perf_counter()
@@ -135,8 +148,10 @@ def pick_axe_mode(platform) -> None:
         #   2. Use OpenCV template matching to check which button to press
         #   3. Send the inputs to the game
         last_time = time.perf_counter()
+        # pick up timings edited by the GUI or CLI while we run
+        settings.reload_if_changed()
         # update the config once a second :)
-        if last_time - one_second_timer > 1:
+        if last_time - one_second_timer > settings["config_poll_interval"]:
             keybinds = get_config(platform.config_file_path())
             one_second_timer = last_time
         # find the window every loop - a bit ugly, but we can handle the game
@@ -178,7 +193,7 @@ def pick_axe_mode(platform) -> None:
 
             if min_val < 100:
                 platform.press_key("enter")
-                time.sleep(0.4) # The delay is 0.35
+                time.sleep(settings["mining_enter_delay"])
 
         if DEBUG:
             cv2.namedWindow("Source", cv2.WINDOW_NORMAL)
@@ -202,17 +217,9 @@ def pick_axe_mode(platform) -> None:
         min_val, _, _, _ = cv2.minMaxLoc(res)
         # arbitrary magic number, handles the mouse hovering over the OK button
         if min_val < 60_000_000:
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
-            time.sleep(0.01)
-            platform.press_key("enter")
+            for _ in range(settings["mining_ok_presses"]):
+                platform.press_key("enter")
+                time.sleep(settings["mining_ok_gap"])
             counter += 1
             print("Mining count: ", counter)
             ran_checker = False
@@ -230,12 +237,26 @@ def pick_axe_mode(platform) -> None:
     # Region of Interest - we only need this area of the screen
 
 
-def main() -> None:
+def main(argv=None) -> None:
     """Entry point for the program."""
-    print("Welcome to Automated HoloCure Fishing!")
-    print("Please open HoloCure, go to Holo House, and start fishing!")
-    print("You can do other tasks as long as the HoloCure window isn't minimised.")
-    print("It works even if the game is in the background!")
+    parser = argparse.ArgumentParser(
+        description="Automate the HoloCure fishing and mining minigames.",
+        epilog="Change the delays with timings_cli.py or timings_gui.py.",
+    )
+    parser.add_argument(
+        "--timings-file",
+        metavar="PATH",
+        help="timings JSON file to use instead of timings.json next to the scripts",
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="override one timing for this run only, e.g. --set fishing_key_delay=250ms "
+        "(repeatable, not written to disk)",
+    )
+    arguments = parser.parse_args(argv)
 
     platform_name = sys.platform
     if platform_name == "win32":
@@ -247,13 +268,33 @@ def main() -> None:
     else:
         raise OSError("Unsupported operating system!")
 
+    try:
+        settings = load_timings(
+            arguments.timings_file, arguments.set, platform_name
+        )
+    except TimingError as error:
+        raise SystemExit(f"Error: {arguments.timings_file or 'timings.json'}\n{error}")
+    platform.timings = settings
+
+    if arguments.set:
+        print(f"Using {settings.path} plus command line overrides.")
+    elif settings.path.is_file():
+        print(f"Using timings from {settings.path}.")
+    else:
+        print(f"No {settings.path.name} found, using built-in default timings.")
+
+    print("Welcome to Automated HoloCure Fishing!")
+    print("Please open HoloCure, go to Holo House, and start fishing!")
+    print("You can do other tasks as long as the HoloCure window isn't minimised.")
+    print("It works even if the game is in the background!")
+
     # first time config load, but we check every second to see if it's changed
     while True:
         mode = input("Enter 1 for Fishing Mode, 2 for AutoMining mode, or 3 to exit: ")
         if mode == "1":
-            fishing_mode(platform)
+            fishing_mode(platform, settings)
         elif mode == "2":
-            pick_axe_mode(platform)
+            pick_axe_mode(platform, settings)
         elif mode == "3":
             break
         else:
@@ -298,4 +339,4 @@ def get_config(path):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

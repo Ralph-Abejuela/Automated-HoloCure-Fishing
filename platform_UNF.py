@@ -2,8 +2,21 @@ from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 from numpy import ndarray
 
+import timings
+from timings import Timings, default_timings
+
 
 class Platform(ABC):
+
+    #: Installed by main() so press_key() and friends can read the timings
+    #: the user configured. Left None, they fall back to the built-in
+    #: defaults for the running platform.
+    timings: Optional[Timings] = None
+
+    def timing(self, name: str) -> float:
+        """Return the configured value of a timing, or its default."""
+        source = self.timings if self.timings is not None else default_timings()
+        return source[name]
 
     @abstractmethod
     def wait_until_application_handle(self):

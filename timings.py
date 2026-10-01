@@ -203,8 +203,9 @@ def parse_value(spec: TimingSpec, text: Any) -> float:
 
 def _check_range(spec: TimingSpec, value: float) -> float:
     if value < spec.minimum or value > spec.maximum:
+        shown = int(value) if not spec.is_delay else value
         raise TimingError(
-            f"{spec.name}: {value} is outside the allowed range "
+            f"{spec.name}: {shown} is outside the allowed range "
             f"{spec.minimum} to {spec.maximum}"
         )
     return int(value) if not spec.is_delay else value
