@@ -211,7 +211,11 @@ def _check_range(spec: TimingSpec, value: float) -> float:
             f"{spec.name}: {shown} is outside the allowed range "
             f"{spec.minimum} to {spec.maximum}"
         )
-    return int(value) if not spec.is_delay else value
+    if spec.is_delay:
+        # Round away float noise (350 / 1000 is 0.35000000000000003) so the value
+        # in memory is the value on disk.
+        return round(value, 6)
+    return int(value)
 
 
 def format_value(spec: TimingSpec, value: float) -> str:
@@ -304,6 +308,17 @@ class Timings:
     def get(self, name: str, fallback: Optional[float] = None) -> float:
         """Return a timing, or ``fallback`` if the name is unknown."""
         return self._values.get(name, fallback)
+
+    def __setitem__(self, name: str, value: Any) -> None:
+        """Set one timing in memory. Call :meth:`save` to keep the change.
+
+        Raises:
+            KeyError: if the name is unknown.
+            TimingError: if the value will not validate.
+        """
+        if name not in SPECS:
+            raise KeyError(f"unknown timing {name!r}{_suggest(name)}")
+        self._values[name] = parse_value(SPECS[name], value)
 
     @property
     def values(self) -> Dict[str, float]:

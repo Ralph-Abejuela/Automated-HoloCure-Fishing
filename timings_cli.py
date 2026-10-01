@@ -222,7 +222,13 @@ def command_reset(table: Timings, arguments) -> int:
 
 
 def command_gui(arguments) -> int:
-    import timings_gui
+    try:
+        import timings_gui
+    except ImportError as error:
+        raise SystemExit(
+            f"Error: this Python has no tkinter ({error}).\n"
+            "Use the subcommands above instead, which need nothing extra."
+        ) from None
 
     return timings_gui.launch(arguments.timings_file, arguments.platform)
 

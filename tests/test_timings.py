@@ -156,6 +156,16 @@ class TestTimings(unittest.TestCase):
             table["nope"]
         self.assertIsNone(table.get("nope"))
 
+    def test_assignment_checks_the_name_and_the_value(self):
+        table = Timings(self.path, "windows")
+        table["mining_enter_delay"] = "350ms"
+        self.assertEqual(table["mining_enter_delay"], 0.35)
+
+        with self.assertRaises(KeyError):
+            table["nope"] = 1
+        with self.assertRaises(TimingError):
+            table["mining_enter_delay"] = "99s"
+
     def test_reload_if_changed_picks_up_an_edit(self):
         table = Timings(self.path, "windows")
         self.assertFalse(table.reload_if_changed())
