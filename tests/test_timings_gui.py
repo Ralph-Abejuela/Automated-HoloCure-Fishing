@@ -48,7 +48,7 @@ class TestTimingsWindow(unittest.TestCase):
         self.window.entries[name][0].set(value)
 
     def test_delays_are_shown_in_milliseconds(self):
-        self.assertEqual(self.text("fishing_key_delay"), "200ms")
+        self.assertEqual(self.text("fishing_key_delay"), "50ms")
         self.assertEqual(self.text("fishing_ok_gap"), "10ms")
 
     def test_counts_are_shown_without_a_unit(self):

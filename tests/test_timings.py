@@ -99,7 +99,7 @@ class TestTimings(unittest.TestCase):
 
     def test_missing_file_yields_defaults(self):
         table = Timings(self.path, "windows")
-        self.assertEqual(table["fishing_key_delay"], 0.2)
+        self.assertEqual(table["fishing_key_delay"], 0.05)
         self.assertTrue(table.is_default("fishing_key_delay"))
 
     def test_save_then_load(self):

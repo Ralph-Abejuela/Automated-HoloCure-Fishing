@@ -90,8 +90,11 @@ TIMINGS = (
     TimingSpec(
         "fishing_key_delay",
         KIND_DELAY,
-        0.2,
-        "Wait after pressing a rhythm-game arrow.",
+        0.05,
+        "Wait after pressing a rhythm-game arrow. It is slept after every "
+        "press, so it is a floor on how fast the bot can go: no matter how "
+        "quickly the loop itself runs, the fastest it can press is one press "
+        "per keypress_gap plus this.",
         maximum=5.0,
     ),
     TimingSpec(
