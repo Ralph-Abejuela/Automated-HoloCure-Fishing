@@ -162,17 +162,19 @@ The window the bot searches for notes is moved so presses land on the target
 circle, and where it sits is worked out from how the presses have been landing
 rather than from a table. The circle is a fixed place on the strip, so the
 position of the note when the key goes down, minus the circle's middle, is how
-far early or late that press was. Twenty presses are averaged, and the window
-moves at most 1.5 pixels each time, so a level settles over about a hundred
-presses instead of chasing every note.
+far early or late that press was. Fifteen presses are averaged, and the window
+moves at most 1.5 pixels each time - two or three chain rounds, so a level is
+corrected within itself rather than after it. A level the game speeds past
+before fifteen presses have gathered still uses what it has.
 
 There is a separate learned offset per speed level, because the right amount
 differs between level 1 and level 7: a level 7 note crosses the strip several
 times faster, so the same error in pixels is a much smaller error in time. The
-old fixed table is only where each level starts, and the **Note offset** row on
-the monitor says which of the two you are looking at - the guess, or a value
-learned from the presses so far - and how far the recent presses have been
-landing.
+fixed table is only where each level starts, and it never changes - it is a
+constant in the source, the learned values live in memory for the run, and
+nothing is written back, so every run begins from the same guesses. The **Note
+offset** row on the monitor says which of the two you are looking at, and how
+far the recent presses have been landing.
 
 # Debugging
 The monitor can save the frames either side of every keypress, named after the

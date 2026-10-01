@@ -16,11 +16,16 @@ One learned offset is kept per speed level, because the right amount clearly
 differs between level 1 and level 7: a level 7 note crosses the strip several
 times faster, so the same error in pixels is a much smaller error in time.
 
-The correction is deliberately slow. A window of twenty presses is averaged
-before anything moves, and the window moves at most
+The correction is deliberately unhurried. A window of fifteen presses is
+averaged before anything moves, and the window moves at most
 :data:`MAX_STEP_PIXELS` each time, so a few notes are mistimed while a level
-settles and the value does not jump about on one odd press. The table in
-:mod:`platform_UNF` is only where each level starts.
+settles and the value does not jump about on one odd press. A level the game
+speeds past before a full window has gathered still uses what it has, because
+the next level is not going to wait.
+
+The table in :mod:`platform_UNF` is only where each level starts, and it never
+changes: it is a constant in the source, the learned values live in memory for
+the run, and nothing is written back. Every run starts from the same guesses.
 """
 
 from __future__ import annotations
@@ -32,13 +37,27 @@ from typing import Deque, Dict, List, Optional
 
 #: How far left the window is at the top speed, and the chain the game reaches
 #: it at. This is the starting guess, not the answer.
-OFFSET_AT_MAX_SPEED = 15
+#:
+#: It was 15, from the value Linux needed, and that was far too much: a
+#: measured run put the presses eighteen pixels early with the window there,
+#: and the window that actually lands them on the circle is a couple of
+#: pixels left. The number was fitted to a search that looked at a different
+#: stretch of the strip, and starting fifteen pixels wrong costs more notes
+#: than learning back from it saves.
+OFFSET_AT_MAX_SPEED = 4
 CHAIN_AT_MAX_SPEED = 70
 MAX_SPEED_LEVEL = 7
 
-#: How many presses are averaged before the window moves at all. Twenty is
-#: about one note sequence, so a level settles within one round of play.
-WINDOW_PRESSES = 20
+#: How many presses are averaged before the window moves at all. A chain round
+#: is three to six presses, so fifteen is two or three rounds: long enough
+#: that one odd note does not move the window, short enough to arrive within a
+#: level rather than after it.
+WINDOW_PRESSES = 15
+
+#: How few presses still count when a level ends before a full window has
+#: gathered. The game speeds up every ten fish whether the window is ready or
+#: not, and a level that kept getting cut short would otherwise never learn.
+MIN_FLUSH_PRESSES = 4
 
 #: The most the window moves at once, in pixels. Small on purpose: the notes
 #: are a couple of pixels apart at the top speed, so a jump of more than this
@@ -110,6 +129,27 @@ class LevelOffset:
             return
         mean = sum(self.errors) / len(self.errors)
         self.errors.clear()
+        self._step(mean)
+
+    def flush(self) -> bool:
+        """Use a part-filled window anyway, because the level is moving on.
+
+        The game raises the speed every ten fish whether the window is ready
+        or not, so a level that is gone before fifteen presses have gathered
+        would take its evidence with it. What was gathered is still evidence,
+        and it is used and dropped, so a level that keeps getting cut short
+        still learns something on the way past.
+        """
+        if len(self.errors) < MIN_FLUSH_PRESSES:
+            self.errors.clear()
+            return False
+        mean = sum(self.errors) / len(self.errors)
+        self.errors.clear()
+        self._step(mean)
+        return True
+
+    def _step(self, mean: float) -> None:
+        """Move the window by its share of the error it has been making."""
         # Early is negative, and an early press means the window was too far
         # left, so the correction is the other way: offset rises towards zero.
         step = max(-MAX_STEP_PIXELS, min(MAX_STEP_PIXELS, -GAIN * mean))
@@ -127,9 +167,16 @@ class OffsetLearner:
 
     def __init__(self) -> None:
         self._levels: Dict[int, LevelOffset] = {}
+        #: The level in use, so the one being left behind can be flushed.
+        self._active: Optional[int] = None
 
     def _entry(self, speed_level: Optional[int], chain: int) -> LevelOffset:
         level = effective_level(speed_level, chain)
+        if self._active is not None and level != self._active:
+            leaving = self._levels.get(self._active)
+            if leaving is not None:
+                leaving.flush()
+        self._active = level
         entry = self._levels.get(level)
         if entry is None:
             seed = seed_offset(speed_level, chain)
@@ -157,6 +204,16 @@ class OffsetLearner:
             "mean_error": entry.mean,
             "settling": len(entry.errors),
         }
+
+    def flush(self) -> None:
+        """Use every level's part-filled window, for a run that has stopped.
+
+        Not needed while the game is playing, where a level changing flushes
+        itself. It is here so that a value can be read out of a learner that
+        was fed presses and then abandoned.
+        """
+        for entry in self._levels.values():
+            entry.flush()
 
 
 def effective_level(speed_level: Optional[int], chain: int) -> int:
