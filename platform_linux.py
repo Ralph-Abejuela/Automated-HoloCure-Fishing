@@ -81,6 +81,8 @@ class Linux(Platform):
         # So assume the window will be valid indefinitely.
         if self._window:
             return
+        if self.stopping():
+            return
 
         # The actual visible Holocure window might be nested in any number of parent windows depending on the
         # compositor. We henceforth have to search recursively.

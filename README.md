@@ -19,7 +19,7 @@ extract the '**Automated-HoloCure-Fishing-vX.X.X.zip**' and then open **holocure
 2. Execute [prepare.bat](prepare.bat) or copy content to your console (this will setup a python "test_env" environment so you do not contaminate your system wide python installation).
 3. Execute [launch_python.bat](launch_python.bat) to open a console using the environment or copy the content to your console or skip this step and
 4. Open HoloCure.
-5. Start fishing by opening holocure_fishing.py or in your console "python holocure_fishing.py" or by any other means you want.
+5. Start fishing by opening holocure_fishing.py or in your console "python holocure_fishing.py" or by any other means you want. Add `--gui` for the [monitor window](#monitor), or run "python monitor_gui.py" on its own.
 6. Select if you want to fish or mine.
 6. Go to Holo House and start fishing or mining.
 7. Enjoy!
@@ -56,13 +56,46 @@ Notes (read first before running!)
 Any setting is fine! As long as the game is windowed and not fullscreen.
 
 
+# Monitor
+A window that shows what the bot is doing while it does it:
+
+```shell
+$ uv run monitor_gui.py              # the window on its own
+$ uv run holocure_fishing.py --gui   # the same window, with the game loops
+```
+
+Press **Fishing** or **Mining** in the window to start a loop, and **Stop**
+to end it. Without `--gui` the modes are still picked on the console, and
+nothing else changes.
+
+The window shows:
+
+* **the capture region**, live: the exact pixels the loop is reading, with
+  every window it searched drawn on it and a dot on the best match of each
+  template. Zoom it with the box under the picture.
+* **what it is doing right now**, in the line under the title.
+* **Status**: the state of the loop, how many iterations it has run, the
+  rate, and how long the capture, the template matching and the sleep
+  between iterations each took, plus the window size, the region read from
+  it, and the keybinds the game is using.
+* **Matches**: the score of every template looked at in the last iteration,
+  the threshold it has to stay under, and whether it was used. `TM_SQDIFF`,
+  so lower is better.
+* **Keypresses**: every key sent to the game and what asked for it.
+* **Timings**: the table the running loops are using, marked where it
+  differs from the built-in default.
+* **Activity log**: everything above in one list, with the time and the
+  iteration each line belongs to.
+* **Loop time**: a graph of the last few hundred iterations, with the
+  target loop interval marked and any iteration that overran it in red.
+
 # Timings
 Every delay the bot waits is a named timing you can change, without editing
 code. Two front ends edit the same file:
 
 ```shell
-$ python timings_gui.py            # a window
-$ python timings_cli.py list       # the same settings in a terminal
+$ uv run timings_gui.py            # a window
+$ uv run timings_cli.py list       # the same settings in a terminal
 ```
 
 The file is `timings.json` next to the scripts. It does not exist until you
@@ -84,10 +117,10 @@ save something, and until then the built-in defaults are used.
 Change one from a shell:
 
 ```shell
-$ python timings_cli.py set mining_enter_delay=350ms
-$ python timings_cli.py set fishing_ok_presses=4 --dry-run   # show, do not write
-$ python timings_cli.py reset mining_enter_delay              # back to the default
-$ python timings_cli.py path                                  # which file is used
+$ uv run timings_cli.py set mining_enter_delay=350ms
+$ uv run timings_cli.py set fishing_ok_presses=4 --dry-run   # show, do not write
+$ uv run timings_cli.py reset mining_enter_delay              # back to the default
+$ uv run timings_cli.py path                                  # which file is used
 ```
 
 Delays accept `350ms`, `0.35` or `1s`; they are stored in seconds. A file
@@ -100,7 +133,7 @@ leave the editor open next to the game and watch what works.
 For a single run, without touching the file:
 
 ```shell
-$ python holocure_fishing.py --set fishing_key_delay=250ms
+$ uv run holocure_fishing.py --set fishing_key_delay=250ms
 ```
 
 # Building from source
@@ -115,8 +148,10 @@ Or
 * pywin32 (`pip install pywin32`)
 
 The editor window uses tkinter, which ships with python on Windows and
-usually on Linux (`sudo apt install python3-tk`). The CLI needs nothing
-extra. Tests are stdlib only:
+usually on Linux (`sudo apt install python3-tk`). The monitor window needs
+the same. The CLI needs nothing extra. The tests use stdlib `unittest`;
+the ones covering the monitor also need the game's own dependencies
+(numpy and OpenCV) and are skipped without a display:
 
 ```shell
 $ python -m unittest discover -s tests -t .

@@ -75,6 +75,11 @@ class Windows(Platform):
             if hwndMain != 0:
                 break
 
+            # the monitor window's stop button, which cannot wait a whole
+            # search interval on every check
+            if self.stopping():
+                return
+
             time.sleep(self.timing("window_search_interval"))
 
         self.handle = hwndMain

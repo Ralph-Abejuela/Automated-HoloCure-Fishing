@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from numpy import ndarray
 
 import timings
@@ -12,6 +12,14 @@ class Platform(ABC):
     #: the user configured. Left None, they fall back to the built-in
     #: defaults for the running platform.
     timings: Optional[Timings] = None
+
+    #: Installed by the monitor window so waiting for the game can be
+    #: interrupted. Left None, which is the console run, it never stops.
+    stop_check: Optional[Callable[[], bool]] = None
+
+    def stopping(self) -> bool:
+        """True when someone has asked the game loops to finish."""
+        return self.stop_check is not None and self.stop_check()
 
     def timing(self, name: str) -> float:
         """Return the configured value of a timing, or its default."""
