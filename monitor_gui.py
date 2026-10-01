@@ -328,6 +328,7 @@ class MonitorWindow:
             ("match_ms", "Matching time"),
             ("sleep_ms", "Sleeping"),
             ("press_gap", "Press cadence"),
+            ("panel", "Game panel"),
             ("offset", "Note offset"),
             ("counter", "Fished / mined"),
             ("bounds", "HoloCure window"),
@@ -613,6 +614,7 @@ class MonitorWindow:
         self.values["match_ms"].set(f"{frame.match_ms:.2f} ms")
         self.values["sleep_ms"].set(f"{frame.sleep_ms:.2f} ms")
         self.values["press_gap"].set(self._press_cadence(snapshot))
+        self.values["panel"].set(self._panel_text(frame))
         self.values["offset"].set(self._offset_text(frame))
         self.values["counter"].set(str(frame.counter))
         self.values["bounds"].set(window_text)
@@ -654,11 +656,25 @@ class MonitorWindow:
             f"{age:.0f} ms since {latest.key!r}"
         )
 
+    def _panel_text(self, frame) -> str:
+        """What the game's own panel said, beside the count the bot kept.
+
+        The two disagreeing is the interesting case: the count is the bot's
+        own, and the panel is the game's, and the panel is the one the note
+        speed follows.
+        """
+        if frame.chain is None and frame.speed_level is None:
+            return f"not read yet, {frame.counter} counted here"
+        chain = "?" if frame.chain is None else str(frame.chain)
+        speed = "?" if frame.speed_level is None else f"Lv {frame.speed_level}"
+        return f"chain {chain}, speed {speed} ({frame.counter} counted here)"
+
     def _offset_text(self, frame) -> str:
         """The note search window's shift, which is what offset() decided."""
         if not frame.offset:
             return "0 px (start of a chain)"
-        return f"{frame.offset} px left, at chain {frame.counter}"
+        where = frame.chain if frame.chain is not None else frame.counter
+        return f"{frame.offset} px left, at chain {where}"
 
     def _zoom_for(self, width: int, height: int) -> int:
         """How many times to blow the capture up, given the canvas size."""

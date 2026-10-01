@@ -131,6 +131,40 @@ location can be overridden with `--timings-file PATH` or the
 A game that is already running picks up a change within a second, so you can
 leave the editor open next to the game and watch what works.
 
+# The chain and the speed level
+The panel in the corner of the fishing screen says how big the current chain
+is and what level the note speed is at. Both are read straight off the screen
+(`hud.py`), in the game's own pixel font, by matching each digit against
+templates cut from real frames in `img/360p/digits` and `img/360p/speed`.
+
+That matters because the bot used to count its own catches and work the speed
+out from that. Its count cannot check itself: a missed fish, a bonus one, or a
+run started part way through a chain all leave it disagreeing with the game,
+and the note-search offset that depends on it is then compensating for a speed
+the notes are not travelling at. The panel is the game's own answer, so it is
+what the offset is worked out from now. The bot's count is still kept, and
+shown beside the panel's in the monitor's **Status** tab, because the two
+disagreeing is worth seeing.
+
+Both numbers appear there as **Game panel**, and the **Note offset** row says
+which chain the shift was worked out for.
+
+A digit with no template yet reads as unknown rather than as a wrong number,
+and the last good reading is kept. The templates are cut from frames of a
+real run, so they only cover the digits that run reached: `hud.missing()`
+lists what is absent, and the loop logs the same list when it starts. To fill
+the gaps, capture a few more frames with the monitor's keypress capture on
+(see below) at a chain that shows the missing digits, and cut them with the
+same step the existing ones came from.
+
+# Debugging
+The monitor can save the frames either side of every keypress, named after the
+key, which lines them up with its **Keypresses** tab. Turn it on in the
+window's debug tools; it is off by default and the game loops are untouched by
+it. Enter is skipped, since it dismisses the catch prompt rather than hitting
+a note, and there is nothing under the circle to read. Frames land in
+`debug_captures/`.
+
 For a single run, without touching the file:
 
 ```shell

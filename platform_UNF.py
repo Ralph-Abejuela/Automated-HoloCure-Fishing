@@ -11,8 +11,12 @@ from timings import Timings, default_timings
 OFFSET_AT_MAX_SPEED = 15
 
 #: The chain at which the game stops getting faster. HoloCure raises the note
-#: speed by one level every 10 fish, and caps the level at 7.
+#: speed by one level every 10 fish, and caps the level at 7. Only the
+#: fallback uses this: the panel says what level the game is actually at.
 CHAIN_AT_MAX_SPEED = 70
+
+#: The fastest the game goes, and the level it counts from.
+MAX_SPEED_LEVEL = 7
 
 
 class Platform(ABC):
@@ -104,8 +108,8 @@ class Platform(ABC):
         """
         pass
 
-    def offset(self, fish_count: int) -> int:
-        """Where the note search window has to move to, given the chain.
+    def offset(self, fish_count: int, speed_level: Optional[int] = None) -> int:
+        """Where the note search window has to move to, given the speed.
 
         The notes slide left to right towards a target circle, and the bot
         presses as soon as one reaches the window it is watching. That press
@@ -120,16 +124,27 @@ class Platform(ABC):
         however far a note travels during the latency, and the further the
         game speeds up the more that is.
 
-        HoloCure raises the note speed by one level every 10 fish caught in a
-        row and caps it at 7 levels, which it reaches at a chain of 70. This
-        returns the compensation in pixels, growing with the chain and
-        stopping there: 0 at the start of a chain, and 15 pixels to the left
-        at the cap.
+        ``speed_level`` is the level the game's own panel is showing, which is
+        the thing the note speed actually follows, so it is what this uses
+        when it has one: 0 at level 1, and 15 pixels to the left at level 7,
+        the cap.
+
+        Without one, it falls back to the chain the bot counted itself, on the
+        game's rule that the level rises by one every 10 fish up to a chain
+        of 70. That is a guess about the game's state made from the bot's
+        own count, and it is only ever a fallback now: the panel is read
+        directly, so a missed fish or a bonus one no longer leaves the
+        compensation answering for a speed the notes are not travelling at.
 
         The 15 is measured, not derived, because the latency belongs to the
         machine, its loop rate and its timing settings, not to the game. If
         the notes start being missed, this is the number to widen.
         """
+        if speed_level is not None:
+            level = min(max(speed_level, 1), MAX_SPEED_LEVEL)
+            return math.floor(
+                -OFFSET_AT_MAX_SPEED * (level - 1) / (MAX_SPEED_LEVEL - 1)
+            )
         reached = min(fish_count, CHAIN_AT_MAX_SPEED)
         return math.floor(-OFFSET_AT_MAX_SPEED * reached / CHAIN_AT_MAX_SPEED)
 

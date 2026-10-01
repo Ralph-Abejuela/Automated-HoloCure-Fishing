@@ -125,6 +125,11 @@ class LoopFrame:
     counter: int = 0
     #: Pixels the note search window was moved left by, from Platform.offset.
     offset: int = 0
+    #: The chain the game's own panel is showing, read off it. None until it
+    #: has been read, which is different from zero: zero is a real chain.
+    chain: Optional[int] = None
+    #: The speed level the panel is showing, likewise.
+    speed_level: Optional[int] = None
     capture_ms: float = 0.0
     match_ms: float = 0.0
     loop_ms: float = 0.0

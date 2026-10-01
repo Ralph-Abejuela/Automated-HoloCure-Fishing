@@ -7,6 +7,7 @@ from math import floor
 
 import cv2
 import numpy as np
+import hud
 from imgproc import templates, masks
 from telemetry import (
     STATE_RUNNING,
@@ -32,6 +33,11 @@ MINING_SCAN_REGION = (24, 30, -3, 33)
 ARROW_THRESHOLD = 1000
 OK_THRESHOLD = 60_000_000
 POINTER_THRESHOLD = 100
+
+#: How often the game's own chain and speed level are read, in seconds. They
+#: change on a catch and on a level up, so there is nothing to gain by looking
+#: more often than this, and a capture is not free.
+PANEL_INTERVAL = 0.05
 
 #: Colours the monitor window draws on, in RGB.
 ARROW_COLOR = (0, 200, 255)
@@ -72,6 +78,26 @@ def human_pause(settings: Timings) -> None:
         time.sleep(random.uniform(0.0, jitter))
 
 
+def read_hud_panel(platform, scale: int) -> hud.PanelRead:
+    """Capture the chain panel and read it, in the 360p base the loops use.
+
+    A capture that fails is reported as an unread panel rather than raised: the
+    chain is worth having, and not worth ending a run over.
+    """
+    try:
+        image = platform.holocure_screenshot(np.multiply(scale, hud.ROI))
+        image = cv2.resize(
+            image,
+            dsize=None,
+            fx=1 / scale,
+            fy=1 / scale,
+            interpolation=cv2.INTER_NEAREST,
+        )
+    except Exception as error:  # the window went away, or the read timed out
+        return hud.PanelRead()
+    return hud.read_panel(image)
+
+
 def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> None:
     """Fish until the loop is told to stop.
 
@@ -86,8 +112,21 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
     keybinds = get_config(platform.config_file_path())
     one_second_timer = time.perf_counter()
     counter = 0
+    # What the game's own panel last said, which is what the note speed
+    # follows. None until it has been read once, and kept as it is until a
+    # later read replaces it: a frame that cannot be read is no reason to
+    # forget the last one that could.
+    chain = None
+    speed_level = None
+    panel_read_at = 0.0
+    logged_panel = (None, None)
     telemetry.update(keybinds=keybinds)
     telemetry.log(f"Keybinds: {keybinds}")
+    unreadable_digits = ", ".join(hud.missing()["chain"]) or "none"
+    telemetry.log(
+        f"Chain digits with no template yet: {unreadable_digits}. "
+        "A chain showing one of those reads as unknown rather than wrong."
+    )
     BASE_ROI = FISHING_ROI
     # Big loopy boi:
     while not telemetry.should_stop():
@@ -145,7 +184,9 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
         dots = []
         matches = []
         arrow = None
-        offset_pixels = platform.offset(counter)
+        offset_pixels = platform.offset(
+            counter if chain is None else chain, speed_level
+        )
         for key in ("space", "left", "right", "up", "down"):
             h, w, _ = templates[key].shape
             # offset so all templates line up properly
@@ -213,6 +254,28 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             counter += 1
             telemetry.log(f"Fishing count: {counter}", level="good")
 
+        # Read the chain and the speed level off the panel, which is only on
+        # screen while the notes are playing: the catch prompt covers it, so
+        # this is skipped on exactly the iterations where it would read
+        # nothing. The numbers move on a catch and on a level up, not faster.
+        if not ok_matched and time.perf_counter() - panel_read_at > PANEL_INTERVAL:
+            panel_read_at = time.perf_counter()
+            reading = read_hud_panel(platform, scale)
+            if reading.chain is not None:
+                chain = reading.chain
+            if reading.speed is not None:
+                speed_level = reading.speed
+            if (chain, speed_level) != logged_panel:
+                logged_panel = (chain, speed_level)
+                telemetry.log(
+                    f"Panel says chain {chain}, speed Lv {speed_level}"
+                    + (
+                        f" (unreadable: {', '.join(reading.unreadable)})"
+                        if reading.unreadable
+                        else ""
+                    )
+                )
+
         match_ms = (time.perf_counter() - match_start) * 1000
         if arrow is not None:
             message = f"Arrow '{arrow}' matched, pressed {keybinds[arrow]!r}."
@@ -245,6 +308,8 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             keybinds=keybinds,
             counter=counter,
             offset=offset_pixels,
+            chain=chain,
+            speed_level=speed_level,
             capture_ms=capture_ms,
             match_ms=match_ms,
             loop_ms=elapsed * 1000,
@@ -465,6 +530,8 @@ def pick_axe_mode(platform, settings: Timings, telemetry: Telemetry = None) -> N
             keybinds=keybinds,
             counter=counter,
             offset=0,
+            chain=None,
+            speed_level=None,
             capture_ms=capture_ms,
             match_ms=match_ms,
             loop_ms=elapsed * 1000,

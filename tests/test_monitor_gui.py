@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from monitor_gui import CAPTURE_FOLDER
+import monitor_gui
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -100,8 +100,12 @@ class FakePlatform:
     def press_key(self, key):
         self.keys.append(key)
 
-    def offset(self, fish_count):
-        return 0
+    def offset(self, fish_count, speed_level=None):
+        # The real arithmetic, so a loop running on this fake is answering
+        # with the same window shift a real platform would.
+        from platform_UNF import Platform
+
+        return Platform.offset(self, fish_count, speed_level)
 
 
 class LoopHarness(unittest.TestCase):
@@ -423,25 +427,38 @@ class TestMonitorWindow(unittest.TestCase):
 
     # -- debug captures -------------------------------------------------
 
+    def set_capture_folder(self):
+        """Point the capture at a folder of this test's own.
+
+        The real one holds frames off a real run, and a test that empties it
+        to count what it wrote throws away the only copy of the very frames
+        the chain reader is built from.
+        """
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        folder = Path(directory.name) / "debug_captures"
+        folder.mkdir()
+        original = monitor_gui.CAPTURE_FOLDER
+        self.addCleanup(setattr, monitor_gui, "CAPTURE_FOLDER", original)
+        monitor_gui.CAPTURE_FOLDER = folder
+        return folder
+
     def saved_captures(self):
-        return sorted(path.name for path in CAPTURE_FOLDER.glob("*.png"))
+        return sorted(path.name for path in monitor_gui.CAPTURE_FOLDER.glob("*.png"))
 
     def _clear_captures(self):
-        if CAPTURE_FOLDER.exists():
-            for path in CAPTURE_FOLDER.glob("*.png"):
-                path.unlink()
+        for path in monitor_gui.CAPTURE_FOLDER.glob("*.png"):
+            path.unlink()
 
     def test_nothing_is_captured_until_it_is_asked_for(self):
-        self._clear_captures()
-        self.addCleanup(self._clear_captures)
+        self.set_capture_folder()
 
         self.telemetry.key("space", "rhythm arrow 'space' matched")
         self.window.refresh()
         self.assertEqual(self.saved_captures(), [], "off by default")
 
     def test_each_press_saves_a_pair_named_after_that_press(self):
-        self._clear_captures()
-        self.addCleanup(self._clear_captures)
+        self.set_capture_folder()
 
         self.window.capture_on_press.set(True)
         self.window.set_capture_state()
@@ -468,8 +485,7 @@ class TestMonitorWindow(unittest.TestCase):
     def test_the_capture_region_is_scaled_like_the_bot_ones(self):
         import cv2
 
-        self._clear_captures()
-        self.addCleanup(self._clear_captures)
+        self.set_capture_folder()
 
         self.window.capture_on_press.set(True)
         self.window.capture_region.set("Full window")
@@ -477,13 +493,12 @@ class TestMonitorWindow(unittest.TestCase):
         self.telemetry.key("space", "rhythm arrow 'space' matched")
         self.window.refresh()
 
-        frame = cv2.imread(str(CAPTURE_FOLDER / self.saved_captures()[0]))
+        frame = cv2.imread(str(monitor_gui.CAPTURE_FOLDER / self.saved_captures()[0]))
         # the full window is 640x360 in base coordinates, doubled on a 720p one
         self.assertEqual((frame.shape[1], frame.shape[0]), (1280, 720))
 
     def test_a_capture_that_fails_says_so_rather_than_raising(self):
-        self._clear_captures()
-        self.addCleanup(self._clear_captures)
+        self.set_capture_folder()
 
         self.window.capture_on_press.set(True)
 
