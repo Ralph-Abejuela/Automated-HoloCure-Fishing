@@ -1,0 +1,22 @@
+[project]
+name = "automated-holocure-fishing"
+version = "0.1.0"
+description = "Automated HoloCure fishing & mining"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "numpy==1.26.4",
+    "opencv-python==4.8.0.76",
+    "pywin32==306; sys_platform == 'win32'",
+    "python-xlib==0.33; sys_platform == 'linux'",
+]
+
+[dependency-groups]
+dev = [
+    "nuitka; sys_platform == 'win32'",
+]
+
+[tool.uv]
+# Flat script layout: holocure_fishing.py imports sibling modules and reads img/,
+# so there is nothing to build or install.
+package = false
