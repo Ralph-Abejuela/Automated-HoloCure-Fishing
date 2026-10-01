@@ -123,6 +123,8 @@ class LoopFrame:
     scale: int = 1
     keybinds: Dict[str, str] = field(default_factory=dict)
     counter: int = 0
+    #: Pixels the note search window was moved left by, from Platform.offset.
+    offset: int = 0
     capture_ms: float = 0.0
     match_ms: float = 0.0
     loop_ms: float = 0.0

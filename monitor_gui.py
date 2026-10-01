@@ -236,6 +236,8 @@ class MonitorWindow:
             ("capture_ms", "Capture time"),
             ("match_ms", "Matching time"),
             ("sleep_ms", "Sleeping"),
+            ("press_gap", "Press cadence"),
+            ("offset", "Note offset"),
             ("counter", "Fished / mined"),
             ("bounds", "HoloCure window"),
             ("roi", "Captured region"),
@@ -489,6 +491,8 @@ class MonitorWindow:
         self.values["capture_ms"].set(f"{frame.capture_ms:.2f} ms")
         self.values["match_ms"].set(f"{frame.match_ms:.2f} ms")
         self.values["sleep_ms"].set(f"{frame.sleep_ms:.2f} ms")
+        self.values["press_gap"].set(self._press_cadence(snapshot))
+        self.values["offset"].set(self._offset_text(frame))
         self.values["counter"].set(str(frame.counter))
         self.values["bounds"].set(window_text)
         self.values["roi"].set(f"{roi_text} at {frame.scale}x")
@@ -504,6 +508,36 @@ class MonitorWindow:
             f"{len(timings)} timings in use. "
             f"Slowest of the last {len(durations)} iterations: {slowest:.2f} ms."
         )
+
+    def _press_cadence(self, snapshot: dict) -> str:
+        """How far apart the last two presses were, and how stale they are.
+
+        The gap is what press_jitter is there to spread out: a run of
+        identical gaps means every press landed at exactly the same point in
+        the note's travel, and one sitting on keypress_gap plus
+        fishing_key_delay means the bot is as fast as the settings allow and
+        would fall behind on a faster chain.
+        """
+        presses = snapshot["keypresses"]
+        if not presses:
+            return "no presses yet"
+        latest = presses[-1]
+        age = (time.time() - latest.at) * 1000
+        if len(presses) == 1:
+            return f"one press, {latest.key!r}, {age:.0f} ms ago"
+        gap = (latest.at - presses[-2].at) * 1000
+        jitter = snapshot["timings"].get("press_jitter")
+        jitter_text = "" if jitter is None else f", {jitter * 1000:.0f} ms jitter on"
+        return (
+            f"{gap:.1f} ms between the last two{jitter_text}, "
+            f"{age:.0f} ms since {latest.key!r}"
+        )
+
+    def _offset_text(self, frame) -> str:
+        """The note search window's shift, which is what offset() decided."""
+        if not frame.offset:
+            return "0 px (start of a chain)"
+        return f"{frame.offset} px left, at chain {frame.counter}"
 
     def _zoom_for(self, width: int, height: int) -> int:
         """How many times to blow the capture up, given the canvas size."""
