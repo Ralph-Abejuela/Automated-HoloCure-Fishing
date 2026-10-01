@@ -25,6 +25,16 @@ from timings import (
 )
 
 
+#: How wide a description may get before it wraps onto another line. The
+#: description is the last column, and a label in a grid is as wide as its
+#: text, so an unwrapped one decides the width of the whole window. A
+#: window wider than the screen is not a wide window, it is a broken one:
+#: Tk refuses to map any of its children, so the value boxes vanish with
+#: everything else. Cap the column and the window can never outgrow the
+#: screen, whatever a description says.
+DESCRIPTION_WRAP = 460
+
+
 class TimingsWindow:
     """One row per timing: a description, a value box and a default hint."""
 
@@ -75,9 +85,12 @@ class TimingsWindow:
                 foreground="#666666",
             ).grid(row=row, column=2, sticky="w", pady=3)
 
-            ttk.Label(columns, text=spec.description, foreground="#666666").grid(
-                row=row, column=3, sticky="w", padx=(12, 0), pady=3
-            )
+            ttk.Label(
+                columns,
+                text=spec.description,
+                foreground="#666666",
+                wraplength=DESCRIPTION_WRAP,
+            ).grid(row=row, column=3, sticky="w", padx=(12, 0), pady=3)
 
         buttons = ttk.Frame(master, padding=(12, 8))
         buttons.pack(fill="x")
