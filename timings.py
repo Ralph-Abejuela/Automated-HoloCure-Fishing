@@ -16,6 +16,7 @@ listed in ``TimingSpec.platform_default``.
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 from dataclasses import dataclass
@@ -202,6 +203,8 @@ def parse_value(spec: TimingSpec, text: Any) -> float:
 
 
 def _check_range(spec: TimingSpec, value: float) -> float:
+    if not math.isfinite(value):
+        raise TimingError(f"{spec.name}: {value} is not a finite number")
     if value < spec.minimum or value > spec.maximum:
         shown = int(value) if not spec.is_delay else value
         raise TimingError(

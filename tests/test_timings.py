@@ -54,6 +54,15 @@ class TestParseValue(unittest.TestCase):
         with self.assertRaises(TimingError):
             parse_value(timings.SPECS["mining_ok_presses"], "0")
 
+    def test_nan_and_infinity_are_rejected(self):
+        # NaN compares false against both bounds, so the range check alone
+        # would wave it through.
+        for text in ("nan", "inf", "-inf"):
+            with self.assertRaises(TimingError):
+                parse_value(timings.SPECS["fishing_key_delay"], text)
+        with self.assertRaises(TimingError):
+            parse_value(timings.SPECS["fishing_key_delay"], float("nan"))
+
 
 class TestValidate(unittest.TestCase):
     def test_missing_names_fall_back_to_defaults(self):
