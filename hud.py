@@ -44,8 +44,10 @@ CHAIN_CELLS = (
     (54, 4, 66, 22),
 )
 
-#: Where the speed level sits inside the ROI, in its own smaller font.
-SPEED_CELL = (3, 46, 15, 58)
+#: Where the speed level sits inside the ROI, in its own smaller font. It is
+#: cut wider than the digit needs on purpose: a 1 is a narrow glyph against
+#: the left edge of its cell, and a cell sized to the 7 clips it.
+SPEED_CELL = (0, 44, 14, 58)
 
 #: What counts as a match, in pixels that disagree. The font is drawn the same
 #: every time, so a real digit matches exactly; anything above this is a frame
