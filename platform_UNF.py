@@ -3,20 +3,17 @@ from abc import ABC, abstractmethod
 from typing import Callable, Optional, Tuple
 from numpy import ndarray
 
+import note_offset
 import timings
+from note_offset import CHAIN_AT_MAX_SPEED, MAX_SPEED_LEVEL, OFFSET_AT_MAX_SPEED
 from timings import Timings, default_timings
 
-#: How far left the note search window has to have moved by the time the game
-#: is at its top speed. See Platform.offset for why it moves at all.
-OFFSET_AT_MAX_SPEED = 15
-
-#: The chain at which the game stops getting faster. HoloCure raises the note
-#: speed by one level every 10 fish, and caps the level at 7. Only the
-#: fallback uses this: the panel says what level the game is actually at.
-CHAIN_AT_MAX_SPEED = 70
-
-#: The fastest the game goes, and the level it counts from.
-MAX_SPEED_LEVEL = 7
+__all__ = [
+    "CHAIN_AT_MAX_SPEED",
+    "MAX_SPEED_LEVEL",
+    "OFFSET_AT_MAX_SPEED",
+    "Platform",
+]
 
 
 class Platform(ABC):
@@ -109,43 +106,20 @@ class Platform(ABC):
         pass
 
     def offset(self, fish_count: int, speed_level: Optional[int] = None) -> int:
-        """Where the note search window has to move to, given the speed.
+        """The starting guess for where the note search window should sit.
 
-        The notes slide left to right towards a target circle, and the bot
-        presses as soon as one reaches the window it is watching. That press
-        never lands instantly: the loop was already part way through a poll
-        when the note turned up, then the key has to go down and the game has
-        to see it. Call that whole pipeline the latency.
+        This is a fixed table, worked out once for one machine and applied to
+        every machine. :class:`note_offset.OffsetLearner` is what the game loop
+        actually uses now: it starts from this and moves the window by however
+        far the presses are landing off, which is a measurement of the thing
+        this guesses at. Kept as the seed, and as the answer for a level that
+        has not been played yet.
 
-        A slow note spends the latency covering few pixels, so a fixed window
-        works. A fast one covers a lot more, and the same press lands that
-        much further past the circle than it should, until it falls outside
-        the window the game accepts. So the search has to start earlier, by
-        however far a note travels during the latency, and the further the
-        game speeds up the more that is.
-
-        ``speed_level`` is the level the game's own panel is showing, which is
-        the thing the note speed actually follows, so it is what this uses
-        when it has one: 0 at level 1, and 15 pixels to the left at level 7,
-        the cap.
-
-        Without one, it falls back to the chain the bot counted itself, on the
-        game's rule that the level rises by one every 10 fish up to a chain
-        of 70. That is a guess about the game's state made from the bot's
-        own count, and it is only ever a fallback now: the panel is read
-        directly, so a missed fish or a bonus one no longer leaves the
-        compensation answering for a speed the notes are not travelling at.
-
-        The 15 is measured, not derived, because the latency belongs to the
-        machine, its loop rate and its timing settings, not to the game. If
-        the notes start being missed, this is the number to widen.
+        See :mod:`note_offset` for how the window is worked out, and
+        :meth:`Platform.offset` history in the log for why it moves at all: a
+        press is never instant, and the faster the note the further past the
+        circle the same delay carries it.
         """
-        if speed_level is not None:
-            level = min(max(speed_level, 1), MAX_SPEED_LEVEL)
-            return math.floor(
-                -OFFSET_AT_MAX_SPEED * (level - 1) / (MAX_SPEED_LEVEL - 1)
-            )
-        reached = min(fish_count, CHAIN_AT_MAX_SPEED)
-        return math.floor(-OFFSET_AT_MAX_SPEED * reached / CHAIN_AT_MAX_SPEED)
+        return note_offset.seed_offset(speed_level, fish_count)
 
 

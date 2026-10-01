@@ -134,6 +134,9 @@ class LoopFrame:
     grade_good: int = 0
     grade_ok: int = 0
     grade_bad: int = 0
+    #: What the note search window has been taught at this speed level: its
+    #: position, the guess it started from, and the presses behind it.
+    offset_report: Dict[str, Any] = field(default_factory=dict)
     capture_ms: float = 0.0
     match_ms: float = 0.0
     loop_ms: float = 0.0
@@ -146,6 +149,7 @@ class LoopFrame:
         clone.dots = list(self.dots)
         clone.matches = list(self.matches)
         clone.keybinds = dict(self.keybinds)
+        clone.offset_report = dict(self.offset_report)
         return clone
 
 

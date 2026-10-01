@@ -746,11 +746,35 @@ class MonitorWindow:
         return f"chain {chain}, speed {speed} ({frame.counter} counted here)"
 
     def _offset_text(self, frame) -> str:
-        """The note search window's shift, which is what offset() decided."""
-        if not frame.offset:
-            return "0 px (start of a chain)"
+        """The note search window's shift, and how it came by that value.
+
+        Once a level has been played the shift is measured: the window moves
+        by however far the presses land off the circle. Until then it is the
+        fixed guess, and saying which it is matters, because a number that
+        looks settled may only be the guess it started from.
+        """
+        report = frame.offset_report or {}
         where = frame.chain if frame.chain is not None else frame.counter
-        return f"{frame.offset} px left, at chain {where}"
+        if not frame.offset:
+            base = "0 px, the window is where it always is"
+        else:
+            base = f"{frame.offset} px left at chain {where}"
+        if not report:
+            return base
+        level = report.get("level")
+        presses = report.get("presses", 0)
+        if not report.get("learned"):
+            return (
+                f"{base} (Lv {level}, the guess it starts from, {presses} presses so far)"
+            )
+        mean = report.get("mean_error", 0.0)
+        side = "early" if mean < 0 else "late"
+        settling = report.get("settling", 0)
+        waiting = f", {settling} into the next window" if settling else ""
+        return (
+            f"{base} (Lv {level}, learned from {presses} presses, "
+            f"now landing {abs(mean):.1f} px {side}{waiting})"
+        )
 
     def _zoom_for(self, width: int, height: int) -> int:
         """How many times to blow the capture up, given the canvas size."""

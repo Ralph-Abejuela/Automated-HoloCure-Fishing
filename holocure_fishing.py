@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import grades
 import hud
+import note_offset
 from imgproc import templates, masks
 from telemetry import (
     STATE_RUNNING,
@@ -160,6 +161,10 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
     # after the press, not on the one that made it.
     pending_press = None
     grade_counts = {"GOOD": 0, "OK": 0, "BAD": 0}
+    # Where the note search window sits at each speed level, worked out from
+    # how the presses have been landing rather than from a table. See
+    # note_offset for why the table is only where it starts.
+    offsets = note_offset.OffsetLearner()
     telemetry.update(keybinds=keybinds)
     telemetry.log(f"Keybinds: {keybinds}")
     unreadable_digits = ", ".join(hud.missing()["chain"]) or "none"
@@ -249,9 +254,8 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
         dots = []
         matches = []
         arrow = None
-        offset_pixels = platform.offset(
-            counter if chain is None else chain, speed_level
-        )
+        chain_now = counter if chain is None else chain
+        offset_pixels = offsets.offset_for(speed_level, chain_now)
         for key in ("space", "left", "right", "up", "down"):
             h, w, _ = templates[key].shape
             # offset so all templates line up properly
@@ -296,6 +300,13 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 note_centre = window_x + min_loc[0] + w / 2
                 early_by = note_centre - CIRCLE_X
                 telemetry.timing(telemetry.current_loop(), early_by)
+                # and the one thing that can act on it: the window is moved
+                # towards landing on the circle, a level at a time. Only once
+                # the panel has said what level this is - before that the
+                # level is a guess off the chain, and a guess is not worth
+                # teaching a level with.
+                if speed_level is not None:
+                    offsets.observe(early_by, speed_level, chain_now)
                 # ask again next iteration, once the game has had a moment to
                 # say what it made of this one
                 pending_press = (telemetry.current_loop(), keybinds[key], 0)
@@ -388,6 +399,7 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             grade_good=grade_counts["GOOD"],
             grade_ok=grade_counts["OK"],
             grade_bad=grade_counts["BAD"],
+            offset_report=offsets.report(speed_level, chain_now),
             capture_ms=capture_ms,
             match_ms=match_ms,
             loop_ms=elapsed * 1000,
