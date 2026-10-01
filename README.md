@@ -56,6 +56,53 @@ Notes (read first before running!)
 Any setting is fine! As long as the game is windowed and not fullscreen.
 
 
+# Timings
+Every delay the bot waits is a named timing you can change, without editing
+code. Two front ends edit the same file:
+
+```shell
+$ python timings_gui.py            # a window
+$ python timings_cli.py list       # the same settings in a terminal
+```
+
+The file is `timings.json` next to the scripts. It does not exist until you
+save something, and until then the built-in defaults are used.
+
+| Timing | Default | What it does |
+| --- | --- | --- |
+| `keypress_gap` | 15ms (30ms on Linux) | Wait between a key going down and coming back up. |
+| `window_search_interval` | 1000ms | Wait between searches for the HoloCure window while it is closed. |
+| `config_poll_interval` | 1000ms | How often HoloCure's settings.json is re-read for keybinds. |
+| `fishing_key_delay` | 200ms | Wait after pressing a rhythm-game arrow. |
+| `fishing_ok_gap` | 10ms | Wait between the Enter presses that dismiss the fishing prompt. |
+| `fishing_ok_presses` | 6 | How many times Enter is pressed to dismiss the fishing prompt. |
+| `fishing_loop_interval` | 10ms | Target duration of one fishing loop, which caps it at 100 Hz. |
+| `mining_enter_delay` | 400ms | Wait after pressing Enter on the mining pointer. |
+| `mining_ok_gap` | 10ms | Wait between the Enter presses that dismiss the mining prompt. |
+| `mining_ok_presses` | 5 | How many times Enter is pressed to dismiss the mining prompt. |
+
+Change one from a shell:
+
+```shell
+$ python timings_cli.py set mining_enter_delay=350ms
+$ python timings_cli.py set fishing_ok_presses=4 --dry-run   # show, do not write
+$ python timings_cli.py reset mining_enter_delay              # back to the default
+$ python timings_cli.py path                                  # which file is used
+```
+
+Delays accept `350ms`, `0.35` or `1s`; they are stored in seconds. A file
+location can be overridden with `--timings-file PATH` or the
+`HCF_TIMINGS_FILE` environment variable.
+
+A game that is already running picks up a change within a second, so you can
+leave the editor open next to the game and watch what works.
+
+For a single run, without touching the file:
+
+```shell
+$ python holocure_fishing.py --set fishing_key_delay=250ms
+```
+
 # Building from source
 If you have python installed, run:
 `pip install -r requirements.txt`
@@ -66,6 +113,14 @@ Or
 * numpy (`pip install numpy`)
 * opencv-python (`pip install opencv-python`)
 * pywin32 (`pip install pywin32`)
+
+The editor window uses tkinter, which ships with python on Windows and
+usually on Linux (`sudo apt install python3-tk`). The CLI needs nothing
+extra. Tests are stdlib only:
+
+```shell
+$ python -m unittest discover -s tests -t .
+```
 
 ## Building exe from source
 [//]: <> (TODO: Make a setup.py)
