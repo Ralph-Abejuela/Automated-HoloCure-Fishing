@@ -37,6 +37,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from resources import writable_dir
 from telemetry import STATE_ERROR, Telemetry
 from timings import TIMINGS, Timings, format_value
 
@@ -60,8 +61,10 @@ CAPTURE_REGIONS = {
     "Full window": (0, 0, 640, 360),
 }
 
-#: Where the debug captures go, next to this script.
-CAPTURE_FOLDER = Path(__file__).resolve().parent / "debug_captures"
+#: Where the debug captures go: beside the program when that can be written
+#: to, and in the per-user folder when it cannot, so a frozen copy does not
+#: fail to save just because it was unzipped somewhere read only.
+CAPTURE_FOLDER = writable_dir() / "debug_captures"
 
 MONITOR_BACKGROUND = "#141418"
 COLOUR_MATCH = "#3ddc84"

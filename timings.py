@@ -164,11 +164,19 @@ def normalize_platform(platform: Optional[str]) -> str:
 
 
 def default_path() -> Path:
-    """Return the timings file location, honouring ``HCF_TIMINGS_FILE``."""
+    """Return the timings file location, honouring ``HCF_TIMINGS_FILE``.
+
+    Not this file's own folder when frozen: that would be the temporary
+    folder the one-file build unpacks into, so the user's timings would be
+    thrown away on the next run. resources picks a folder that can be
+    written to instead.
+    """
     from_env = os.environ.get(ENV_VAR)
     if from_env:
         return Path(from_env).expanduser()
-    return Path(__file__).resolve().parent / CONFIG_FILENAME
+    from resources import writable_dir
+
+    return writable_dir() / CONFIG_FILENAME
 
 
 def parse_value(spec: TimingSpec, text: Any) -> float:

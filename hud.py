@@ -28,6 +28,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import cv2
+
+from resources import resource_dir
 import numpy as np
 
 #: The panel, in the same 360p base coordinates the loops work in: left, top,
@@ -60,7 +62,9 @@ WHITE_LEVEL = 140
 RED_LEVEL = 110
 RED_CEILING = 90
 
-TEMPLATE_DIR = Path(__file__).resolve().parent / "img" / "360p"
+#: Through resources, so the templates are found next to the built
+#: executable as well as next to these scripts.
+TEMPLATE_DIR = resource_dir() / "img" / "360p"
 
 
 @dataclass(frozen=True)

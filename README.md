@@ -12,7 +12,9 @@ Open holocure steam page > Click the gear icon (settings) > Manage... > Browse l
 ~~[Video Tutorial](https://drive.google.com/file/d/14Xha8OWFiv26zBD4cYjMsHLD896q8RH4/view?usp=sharing) for absolute beginners.~~ (*working on making a new one*)
 
 ## Using from release
-extract the '**Automated-HoloCure-Fishing-vX.X.X.zip**' and then open **holocure_fishing.exe**
+download '**Automated-HoloCure-Fishing-vX.X.X.zip**' from the releases page,
+extract it, and open **holocure_fishing.exe**. Keep the extracted folder
+together: the exe reads its templates out of **img/** next to it.
 
 ## Using from source
 1. Clone this project.
@@ -241,18 +243,25 @@ $ python -m unittest discover -s tests -t .
 ```
 
 ## Building exe from source
-[//]: <> (TODO: Make a setup.py)
-run:
-`uv sync --group dev`
-(the `dev` group installs nuitka)
 
-then run:
-```powershell
-uv run python -m nuitka --include-data-files="img/360p/*.png=img/360p/" --onefile .\holocure_fishing.py
+Run this in the project folder:
+
+```bat
+uv sync --group dev
+build_release.bat
 ```
-> make sure you are in the **Automated-Holocure-Fishing** folder
 
-finally zip the **holocure_fishing.exe** and **img/** folder together
+(the `dev` group installs nuitka; the first build also downloads a compiler
+and takes about ten minutes, later ones reuse the cache)
+
+`build_release.bat` leaves the program in `dist\Automated-HoloCure-Fishing\`,
+with **holocure_fishing.exe**, **img/** and **timings.json** at the top of it,
+and zips that into **dist\Automated-HoloCure-Fishing-v0.1.0.zip**. Bump the
+`VERSION` line at the top of the script to change the asset name.
+
+Keep the whole folder together: the exe reads its templates out of **img/**
+next to it. If the folder is not writable, timings are kept in
+`%LOCALAPPDATA%\Automated-HoloCure-Fishing` instead.
 
 # License
 
