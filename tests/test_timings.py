@@ -107,6 +107,13 @@ class TestTimings(unittest.TestCase):
         self.assertEqual(set(written), set(timings.SPECS))
         self.assertEqual(written["keypress_gap"], 0.015)
 
+    def test_save_of_one_timing_keeps_the_others(self):
+        table = Timings(self.path, "windows")
+        table.save({"mining_enter_delay": 0.5, "fishing_ok_presses": 4})
+        table.save({"mining_enter_delay": 0.6})
+        self.assertEqual(table["mining_enter_delay"], 0.6)
+        self.assertEqual(table["fishing_ok_presses"], 4)
+
     def test_save_rejects_bad_values_and_writes_nothing(self):
         table = Timings(self.path, "windows")
         with self.assertRaises(TimingError):

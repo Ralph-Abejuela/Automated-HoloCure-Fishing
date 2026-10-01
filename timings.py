@@ -368,10 +368,17 @@ class Timings:
     def save(self, values: Optional[Mapping[str, Any]] = None) -> Path:
         """Write the table to ``self.path`` and return the path.
 
+        ``values`` is a partial update: names it does not mention keep the value
+        they have now, so saving one timing never resets the others.
+
         Raises:
             TimingError: if any value is invalid; nothing is written then.
         """
-        table = self._values if values is None else validate(dict(values), self.platform)
+        table = (
+            dict(self._values)
+            if values is None
+            else validate({**self._values, **values}, self.platform)
+        )
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write to a temporary file and move it into place, so a reader (the
@@ -379,7 +386,10 @@ class Timings:
         temporary = self.path.with_name(self.path.name + ".tmp")
         temporary.write_text(
             json.dumps(
-                {spec.name: table[spec.name] for spec in TIMINGS}, indent=2
+                # Round so a value typed as 350ms comes back as 0.35, not
+                # 0.35000000000000003.
+                {spec.name: round(table[spec.name], 6) for spec in TIMINGS},
+                indent=2,
             )
             + "\n",
             encoding="utf-8",
