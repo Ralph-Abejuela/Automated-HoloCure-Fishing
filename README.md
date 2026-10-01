@@ -57,6 +57,30 @@ Notes (read first before running!)
 Any setting is fine! As long as the game is windowed and not fullscreen.
 
 
+# Console status
+Without `--gui`, a mode draws a ten line block in the terminal while it runs:
+
+```shell
+$ uv run holocure_fishing.py
+Enter 1 for Fishing Mode, 2 for AutoMining mode, or 3 to exit: 1
+● Arrow 'space' matched, pressed 'space'.
+fishing loop 1,842 · 99.1/s · 3.11ms (cap 1.42 match 1.24 sleep 0.45) · 18s
+chain 24 speed Lv 3 (7 counted here) · 3px left (Lv 3, learned, landing 0.4px early)
+41 GOOD 6 OK 2 BAD (84% clean of 49) · on time (+0.2px, 3px spread) · press 118ms apart, 40ms ago
+loop ▃▁▂▃▂▁▃▂▁▂▃▁▂▁▂▃▂▁▂▃▂▁▂▃▂▁▂▃▂▁▂▃ peak 3.9ms of 10ms
+21:53:57 key 'space' - rhythm arrow 'space' matched
+21:53:57 Press 1841 ('space') graded GOOD
+```
+
+It reads the same telemetry the monitor window reads, so the numbers are the
+ones the loop is working from. Press **Ctrl+C** to stop the run and get the
+prompt back; the loop finishes the iteration it is in first.
+
+The block is skipped, and the log lines are printed as they arrive instead,
+when the output is not a terminal. `--no-status` turns the drawing off
+entirely, which leaves the old behaviour: nothing until the mode ends.
+
+
 # Monitor
 A window that shows what the bot is doing while it does it:
 
@@ -66,8 +90,8 @@ $ uv run holocure_fishing.py --gui   # the same window, with the game loops
 ```
 
 Press **Fishing** or **Mining** in the window to start a loop, and **Stop**
-to end it. Without `--gui` the modes are still picked on the console, and
-nothing else changes.
+to end it. Without `--gui` the modes are still picked on the console, and the
+run draws a [console status](#console-status) there instead.
 
 The window shows:
 

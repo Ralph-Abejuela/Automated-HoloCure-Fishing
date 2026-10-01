@@ -670,6 +670,12 @@ def main(argv=None) -> int:
         help="open a window that shows the capture region, the template matches, "
         "the keypresses and the timings, instead of asking for a mode on the console",
     )
+    parser.add_argument(
+        "--no-status",
+        action="store_true",
+        help="run the console mode without the live status block, which prints "
+        "nothing until the mode ends",
+    )
     arguments = parser.parse_args(argv)
 
     platform = make_platform()
@@ -701,17 +707,34 @@ def main(argv=None) -> int:
             raise SystemExit(f"Error: this Python has no tkinter ({error}).\nDrop --gui to pick a mode on the console instead.")
         return monitor_gui.launch(settings=settings, platform=platform)
 
-    # first time config load, but we check every second to see if it's changed
+    # The console modes draw a live status over the same telemetry the window
+    # reads, so a long run can be watched without a desktop. --no-status goes
+    # back to running the loop on this thread, printing nothing until it ends.
+    import cli_status
+
+    if arguments.no_status:
+        def run_mode(name):
+            """Run a loop on this thread, printing nothing until it ends."""
+            (fishing_mode if name == "fishing" else pick_axe_mode)(
+                platform, settings
+            )
+            return 0
+    else:
+        run_mode = lambda name: cli_status.run_mode(name, platform, settings)
+
     while True:
         mode = input("Enter 1 for Fishing Mode, 2 for AutoMining mode, or 3 to exit: ")
         if mode == "1":
-            fishing_mode(platform, settings)
+            code = run_mode("fishing")
         elif mode == "2":
-            pick_axe_mode(platform, settings)
+            code = run_mode("mining")
         elif mode == "3":
             break
         else:
             print("Invalid input, please try again.")
+            continue
+        if code:
+            return code
     return 0
 
 
