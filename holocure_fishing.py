@@ -7,6 +7,7 @@ from math import floor
 
 import cv2
 import numpy as np
+import grades
 import hud
 from imgproc import templates, masks
 from telemetry import (
@@ -22,7 +23,13 @@ DEBUG = False
 
 #: Region of Interest - we only need this area of the screen, in 360p
 #: coordinates. It is multiplied by the window's scale factor later.
-FISHING_ROI = (276, 242, 133, 38)  # left, top, width, height
+#:
+#: It runs further right and further down than the note strip needs, because
+#: the grade the game writes under the circle sits just outside it, and one
+#: capture that carries both is cheaper than two. The origin is unchanged and
+#: the search windows are addressed relative to it, so nothing that was
+#: already looking here moves.
+FISHING_ROI = (276, 242, 146, 52)  # left, top, width, height
 MINING_ROI = (203, 251, 216, 44)
 #: top, bottom, start_x_offset, end_x_offset of the strip the pointer is in
 MINING_SCAN_REGION = (24, 30, -3, 33)
@@ -38,6 +45,21 @@ POINTER_THRESHOLD = 100
 #: change on a catch and on a level up, so there is nothing to gain by looking
 #: more often than this, and a capture is not free.
 PANEL_INTERVAL = 0.05
+
+#: Where the grade sits inside the note capture, in the same 360p base
+#: coordinates, so it can be cut out of the capture already being taken.
+GRADE_BOX = (
+    grades.ROI[0] - FISHING_ROI[0],
+    grades.ROI[1] - FISHING_ROI[1],
+    grades.ROI[2],
+    grades.ROI[3],
+)
+
+#: How many iterations to keep looking for a press's grade before giving up on
+#: it. The word lands within a moment, so the second look is normally the one
+#: that finds it; a press whose grade never turns up is recorded as unread
+#: rather than guessed at.
+GRADE_TRIES = 2
 
 #: Colours the monitor window draws on, in RGB.
 ARROW_COLOR = (0, 200, 255)
@@ -120,6 +142,12 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
     speed_level = None
     panel_read_at = 0.0
     logged_panel = (None, None)
+    # The press waiting to be told what the game made of it: the loop, the key
+    # and how many times it has looked and found nothing yet. The word appears
+    # a moment after the key goes down, so the grade is read on an iteration
+    # after the press, not on the one that made it.
+    pending_press = None
+    grade_counts = {"GOOD": 0, "OK": 0, "BAD": 0}
     telemetry.update(keybinds=keybinds)
     telemetry.log(f"Keybinds: {keybinds}")
     unreadable_digits = ", ".join(hud.missing()["chain"]) or "none"
@@ -172,6 +200,31 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             interpolation=cv2.INTER_NEAREST,
         )
         capture_ms = (time.perf_counter() - capture_start) * 1000
+
+        # What the game thought of the last press, read before this one is
+        # made: the word lands under the circle a moment after the key goes
+        # down, so it is not there yet on the iteration that presses.
+        if pending_press is not None:
+            verdict = grades.read_grade(
+                img_src[
+                    GRADE_BOX[1] : GRADE_BOX[1] + GRADE_BOX[3],
+                    GRADE_BOX[0] : GRADE_BOX[0] + GRADE_BOX[2],
+                ]
+            )
+            if verdict.seen:
+                grade_counts[verdict.grade] += 1
+                telemetry.grade(pending_press[0], verdict.grade)
+                telemetry.log(
+                    f"Press {pending_press[0]} ({pending_press[1]}) graded {verdict.grade}",
+                    level="good" if verdict.grade == "GOOD" else "info",
+                )
+                pending_press = None
+            else:
+                pending_press = (pending_press[0], pending_press[1], pending_press[2] + 1)
+                if pending_press[2] >= GRADE_TRIES:
+                    telemetry.grade(pending_press[0], None)
+                    pending_press = None
+
         if DEBUG:
             cv2.namedWindow("Source", cv2.WINDOW_NORMAL)
             cv2.imshow("Source", img_src)
@@ -224,6 +277,9 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 human_pause(settings)
                 platform.press_key(keybinds[key])
                 telemetry.key(keybinds[key], f"rhythm arrow '{key}' matched")
+                # ask again next iteration, once the game has had a moment to
+                # say what it made of this one
+                pending_press = (telemetry.current_loop(), keybinds[key], 0)
                 time.sleep(settings["fishing_key_delay"])
                 break
 
@@ -310,6 +366,9 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             offset=offset_pixels,
             chain=chain,
             speed_level=speed_level,
+            grade_good=grade_counts["GOOD"],
+            grade_ok=grade_counts["OK"],
+            grade_bad=grade_counts["BAD"],
             capture_ms=capture_ms,
             match_ms=match_ms,
             loop_ms=elapsed * 1000,

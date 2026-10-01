@@ -70,6 +70,11 @@ COLOUR_ERROR = "#ff6b6b"
 COLOUR_GOOD = "#7ee787"
 LEVEL_COLOURS = {"error": COLOUR_ERROR, "good": COLOUR_GOOD}
 
+#: What the game writes under the circle, and the colour each gets in the
+#: keypress table: GOOD is what a clean hit earns, OK is a press that landed
+#: early or late, BAD is a miss.
+GRADE_COLOURS = {"GOOD": COLOUR_GOOD, "OK": "#e3b341", "BAD": COLOUR_ERROR}
+
 
 def bgr(colour) -> tuple:
     """Turn the RGB a :class:`telemetry.Rect` carries into OpenCV's BGR."""
@@ -137,6 +142,9 @@ class MonitorWindow:
         self._keys_generation = None
         self._log_generation = None
         self._photo = None
+        # keypress rows still waiting for the game to say how they went, by
+        # the row's item id
+        self._rows_awaiting_grade = {}
         # debug capture state: see _build_debug_tools
         self._capture_seq = 0
         self._burst = 0
@@ -328,6 +336,7 @@ class MonitorWindow:
             ("match_ms", "Matching time"),
             ("sleep_ms", "Sleeping"),
             ("press_gap", "Press cadence"),
+            ("grades", "Grades"),
             ("panel", "Game panel"),
             ("offset", "Note offset"),
             ("counter", "Fished / mined"),
@@ -377,17 +386,20 @@ class MonitorWindow:
         tab = ttk.Frame(self.tabs, padding=(8, 8))
         self.tabs.add(tab, text="Keypresses")
         self.key_tree = ttk.Treeview(
-            tab, columns=("time", "loop", "key", "why"), show="headings", height=10
+            tab, columns=("time", "loop", "key", "grade", "why"), show="headings", height=10
         )
         for column, title, width, anchor in (
             ("time", "Time", 80, "w"),
             ("loop", "Loop", 60, "e"),
             ("key", "Key", 60, "w"),
-            ("why", "What asked for it", 220, "w"),
+            ("grade", "Grade", 60, "e"),
+            ("why", "What asked for it", 200, "w"),
         ):
             self.key_tree.heading(column, text=title)
             self.key_tree.column(column, width=width, anchor=anchor)
         self.key_tree.tag_configure("recent", foreground=COLOUR_GOOD)
+        for grade, colour in GRADE_COLOURS.items():
+            self.key_tree.tag_configure(f"grade-{grade.lower()}", foreground=colour)
         scrollbar = ttk.Scrollbar(tab, orient="vertical", command=self.key_tree.yview)
         self.key_tree.configure(yscrollcommand=scrollbar.set)
         self.key_tree.pack(side="left", fill="both", expand=True)
@@ -614,6 +626,7 @@ class MonitorWindow:
         self.values["match_ms"].set(f"{frame.match_ms:.2f} ms")
         self.values["sleep_ms"].set(f"{frame.sleep_ms:.2f} ms")
         self.values["press_gap"].set(self._press_cadence(snapshot))
+        self.values["grades"].set(self._grade_text(frame))
         self.values["panel"].set(self._panel_text(frame))
         self.values["offset"].set(self._offset_text(frame))
         self.values["counter"].set(str(frame.counter))
@@ -654,6 +667,23 @@ class MonitorWindow:
         return (
             f"{gap:.1f} ms between the last two{jitter_text}, "
             f"{age:.0f} ms since {latest.key!r}"
+        )
+
+    def _grade_text(self, frame) -> str:
+        """How the game has graded the presses, which is the only honest score.
+
+        GOOD is a clean hit, OK is one that landed early or late, BAD is a
+        miss. The share of GOOD is the number to watch: a run that is mostly
+        OK is a bot pressing at the right times but the wrong places, and one
+        that is mostly BAD is not hitting the notes at all.
+        """
+        total = frame.grade_good + frame.grade_ok + frame.grade_bad
+        if not total:
+            return "none graded yet"
+        clean = frame.grade_good / total * 100
+        return (
+            f"GOOD {frame.grade_good}, OK {frame.grade_ok}, BAD {frame.grade_bad}"
+            f"  ({clean:.0f}% clean of {total})"
         )
 
     def _panel_text(self, frame) -> str:
@@ -750,23 +780,47 @@ class MonitorWindow:
         if snapshot["keypress_generation"] != self._keys_generation:
             self._keys_generation = snapshot["keypress_generation"]
             self._next_keypress = snapshot["keypress_first"]
+            self._rows_awaiting_grade.clear()
             tree.delete(*tree.get_children())
 
         # if the loop outran the window, skip what is already gone
         first = snapshot["keypress_first"]
         if self._next_keypress < first:
             self._next_keypress = first
+        grades = snapshot.get("grades", {})
         for press in snapshot["keypresses"][self._next_keypress - first :]:
-            tree.insert(
+            item = tree.insert(
                 "",
                 "end",
                 values=(
                     time.strftime("%H:%M:%S", time.localtime(press.at)),
                     f"{press.loop:,}",
                     press.key,
+                    grades.get(press.loop, ""),
                     press.reason,
                 ),
             )
+            known = grades.get(press.loop)
+            if known is None:
+                self._rows_awaiting_grade[item] = press.loop
+            elif known in GRADE_COLOURS:
+                tree.item(item, tags=(f"grade-{known.lower()}",))
+
+        # A grade lands after the row that asked for it, so fill in the rows
+        # that have been waiting on one. A press the game never graded keeps
+        # a blank, which is the honest answer.
+        for item, loop in list(self._rows_awaiting_grade.items()):
+            if not tree.exists(item):
+                del self._rows_awaiting_grade[item]
+                continue
+            known = grades.get(loop)
+            if known is None:
+                continue
+            tree.set(item, "grade", known)
+            if known in GRADE_COLOURS:
+                tree.item(item, tags=(f"grade-{known.lower()}",))
+            del self._rows_awaiting_grade[item]
+
         self._next_keypress = snapshot["keypress_total"]
 
         children = tree.get_children()

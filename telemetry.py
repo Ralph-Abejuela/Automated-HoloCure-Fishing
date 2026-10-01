@@ -130,6 +130,10 @@ class LoopFrame:
     chain: Optional[int] = None
     #: The speed level the panel is showing, likewise.
     speed_level: Optional[int] = None
+    #: How the game has graded the presses so far: GOOD, OK and BAD counts.
+    grade_good: int = 0
+    grade_ok: int = 0
+    grade_bad: int = 0
     capture_ms: float = 0.0
     match_ms: float = 0.0
     loop_ms: float = 0.0
@@ -201,6 +205,7 @@ class Telemetry:
         self._keypresses = _Stream(KEYPRESS_HISTORY)
         self._log = _Stream(LOG_HISTORY)
         self._durations: deque = deque(maxlen=DURATION_HISTORY)
+        self._grades: Dict[int, str] = {}
         self._started = time.time()
         self._timings: Dict[str, float] = {}
         self._timings_path = ""
@@ -235,6 +240,7 @@ class Telemetry:
                 "durations": list(self._durations),
                 "timings": dict(self._timings),
                 "timings_path": self._timings_path,
+                "grades": dict(self._grades),
                 "error": self._error,
                 "stopping": self._stop.is_set(),
             }
@@ -259,6 +265,7 @@ class Telemetry:
             self._keypresses.clear()
             self._log.clear()
             self._durations.clear()
+            self._grades.clear()
 
     def set_state(self, state: str, message: str = "") -> None:
         """Record what the loop is doing, and optionally why."""
@@ -309,6 +316,28 @@ class Telemetry:
             self._log.append(
                 LogLine(at=time.time(), loop=self._frame.loop, text=text, level=level)
             )
+
+    def current_loop(self) -> int:
+        """Which iteration the loop is on, without copying a whole frame.
+
+        A press has to remember which iteration it belongs to, and taking a
+        whole snapshot to find that out would copy the frame's lists on every
+        keypress.
+        """
+        with self._lock:
+            return self._frame.loop
+
+    def grade(self, loop: int, grade: Optional[str]) -> None:
+        """Record what the game made of the press made on ``loop``.
+
+        A grade of None means it never turned up, which is a real answer: the
+        press is counted as ungraded rather than as a good one.
+        """
+        with self._lock:
+            self._grades[loop] = grade or "none"
+            if len(self._grades) > KEYPRESS_HISTORY:
+                for stale in sorted(self._grades)[: len(self._grades) - KEYPRESS_HISTORY]:
+                    del self._grades[stale]
 
     def clear_log(self) -> None:
         """Empty the activity log, so a window can start its log view over."""

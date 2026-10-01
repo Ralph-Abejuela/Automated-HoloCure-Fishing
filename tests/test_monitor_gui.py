@@ -174,7 +174,7 @@ class TestFishingLoopReporting(LoopHarness):
         self.assertEqual(frame.matches[0].threshold, 1000)
         self.assertFalse(frame.matches[-1].matched)
         self.assertEqual(frame.scale, 1)
-        self.assertEqual(frame.roi, (276, 242, 133, 38))
+        self.assertEqual(frame.roi, (276, 242, 146, 52))
         self.assertEqual(frame.bounds, (0, 0, 640, 360))
 
     def test_a_matched_arrow_becomes_a_keypress_with_a_reason(self):
@@ -210,7 +210,9 @@ class TestFishingLoopReporting(LoopHarness):
         )
 
         frame = snapshot["frame"]
-        self.assertEqual(frame.image.shape, (38, 133, 3))
+        # the note capture runs past the strip the note is searched in, to
+        # carry the grade the game writes under the circle
+        self.assertEqual(frame.image.shape, (52, 146, 3))
         # the arrow window it searched, and the ok window
         self.assertEqual(len(frame.rects), 2)
         # only the arrow that matched is marked
