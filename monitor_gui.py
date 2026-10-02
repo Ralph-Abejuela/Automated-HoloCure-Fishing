@@ -81,7 +81,7 @@ GRADE_COLOURS = {"GOOD": COLOUR_GOOD, "OK": "#e3b341", "BAD": COLOUR_ERROR}
 #: How close to the circle a press has to land, in pixels, to be shown as on
 #: time. At the top speed a note crosses about this much in one loop
 #: iteration, so anything nearer is the loop's resolution, not a real miss.
-ON_TIME_PIXELS = 1.5
+ON_TIME_PIXELS = 2.0
 
 
 def bgr(colour) -> tuple:
