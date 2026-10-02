@@ -100,12 +100,12 @@ class FakePlatform:
     def press_key(self, key):
         self.keys.append(key)
 
-    def offset(self, fish_count, speed_level=None):
+    def offset(self, fish_count, speed_level=None, speed_px_s=None):
         # The real arithmetic, so a loop running on this fake is answering
         # with the same window shift a real platform would.
         from platform_UNF import Platform
 
-        return Platform.offset(self, fish_count, speed_level)
+        return Platform.offset(self, fish_count, speed_level, speed_px_s)
 
 
 class LoopHarness(unittest.TestCase):
@@ -426,6 +426,98 @@ class TestMonitorWindow(unittest.TestCase):
             self.telemetry.loop_done(0.01)
         self.window.refresh()
         self.assertEqual(self.window.values["rate"].get(), "100.0 /s")
+
+    # -- the offset readout --------------------------------------------
+
+    def offset_report(self, **keys):
+        """A report as the learner gives it, with the given keys changed."""
+        report = {
+            "level": 3,
+            "offset": -3,
+            "seed": -2,
+            "learned": True,
+            "presses": 12,
+            "mean_error": -0.4,
+            "settling": 4,
+            "latency_ms": 28.0,
+            "speed_px_s": 412.0,
+            "modelled": True,
+        }
+        report.update(keys)
+        return report
+
+    def test_the_offset_names_the_latency_and_the_speed_it_is_modelled_at(self):
+        self.telemetry.update(state="running", offset=-3, chain=24)
+        self.telemetry.update(offset_report=self.offset_report())
+        self.window.refresh()
+        self.assertEqual(
+            self.window.values["offset"].get(),
+            "-3 px left at chain 24 (Lv 3, 28 ms of press delay at 412 px/s)",
+        )
+
+    def test_a_modelled_offset_with_no_latency_yet_says_so(self):
+        self.telemetry.update(
+            state="running", offset=-3, offset_report=self.offset_report(latency_ms=None)
+        )
+        self.window.refresh()
+        self.assertIn(
+            "no latency measured yet", self.window.values["offset"].get()
+        )
+
+    def test_a_modelled_offset_with_no_speed_says_so(self):
+        self.telemetry.update(
+            state="running",
+            offset=-3,
+            offset_report=self.offset_report(speed_px_s=None),
+        )
+        self.window.refresh()
+        self.assertIn("the note speed not measured", self.window.values["offset"].get())
+
+    def test_the_old_wording_is_kept_while_the_model_is_not_in_use(self):
+        # The fallback is still answering on a build without the model, and a
+        # readout that only spoke the model's language would say nothing at all.
+        self.telemetry.update(
+            state="running",
+            offset=-3,
+            chain=24,
+            offset_report=self.offset_report(modelled=False),
+        )
+        self.window.refresh()
+        text = self.window.values["offset"].get()
+        self.assertEqual(
+            text,
+            "-3 px left at chain 24 (Lv 3, learned from 12 presses, "
+            "now landing 0.4 px early, 4 into the next window)",
+        )
+
+    def test_the_guess_wording_is_kept_while_nothing_has_been_learned(self):
+        self.telemetry.update(
+            state="running",
+            offset=-3,
+            chain=24,
+            offset_report=self.offset_report(
+                modelled=False, learned=False, latency_ms=None, speed_px_s=None
+            ),
+        )
+        self.window.refresh()
+        self.assertIn(
+            "-3 px left at chain 24 (Lv 3, the guess it starts from, 12 presses so far)",
+            self.window.values["offset"].get(),
+        )
+
+    def test_the_frame_carries_the_note_speed_and_survives_being_copied(self):
+        self.telemetry.update(state="running", note_speed=412.0)
+        frame = self.telemetry.snapshot()["frame"]
+        self.assertEqual(frame.note_speed, 412.0)
+        clone = frame.copy()
+        self.assertEqual(clone.note_speed, 412.0)
+        clone.note_speed = 900.0
+        self.assertEqual(frame.note_speed, 412.0)
+
+    def test_a_frame_with_no_measured_note_speed_reads_as_unknown(self):
+        self.telemetry.update(state="running", note_speed=None)
+        self.window.refresh()
+        self.assertIsNone(self.telemetry.snapshot()["frame"].note_speed)
 
     # -- debug captures -------------------------------------------------
 

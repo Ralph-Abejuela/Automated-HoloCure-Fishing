@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import cli_status
-from telemetry import STATE_RUNNING, Telemetry
+from telemetry import STATE_RUNNING, LoopFrame, Telemetry
 
 
 def strip_escapes(text: str) -> str:
@@ -48,6 +48,7 @@ def busy_telemetry(loops: int = 12, duration: float = 0.004) -> Telemetry:
         grade_ok=6,
         grade_bad=2,
         offset=-3,
+        note_speed=412.0,
         offset_report={
             "level": 3,
             "offset": -3,
@@ -56,6 +57,9 @@ def busy_telemetry(loops: int = 12, duration: float = 0.004) -> Telemetry:
             "presses": 12,
             "mean_error": -0.4,
             "settling": 4,
+            "latency_ms": 28.0,
+            "speed_px_s": 412.0,
+            "modelled": True,
         },
     )
     telemetry.set_timings({"fishing_loop_interval": 0.01}, "timings.json")
@@ -89,6 +93,7 @@ class LayoutTests(unittest.TestCase):
         self.assertIn("chain 24 speed Lv 3 (3 counted here)", text)
         self.assertIn("41 GOOD 6 OK 2 BAD (84% clean of 49)", text)
         self.assertIn("3px left", text)
+        self.assertIn("28ms delay at 412px/s", text)
         self.assertIn("No template matched", text)
 
     def test_every_line_fits_the_width(self):
@@ -162,13 +167,82 @@ class FormatTests(unittest.TestCase):
     def test_offset_says_when_it_is_only_the_guess(self):
         frame = busy_telemetry().snapshot()["frame"]
         frame.offset_report["learned"] = False
+        frame.offset_report["modelled"] = False
         text = cli_status.format_offset(frame)
         self.assertIn("the guess", text)
+
+    def test_offset_says_when_it_is_only_the_guess_while_still_modelling(self):
+        # The model can be answering before any press has been made, and then
+        # what the report has is a latency that has not been found yet.
+        frame = busy_telemetry().snapshot()["frame"]
+        frame.offset_report["learned"] = False
+        frame.offset_report["latency_ms"] = None
+        text = cli_status.format_offset(frame)
+        self.assertIn("no latency yet", text)
+
+    def test_offset_names_the_latency_and_the_speed_it_is_modelled_at(self):
+        frame = busy_telemetry().snapshot()["frame"]
+        self.assertEqual(
+            cli_status.format_offset(frame),
+            "3px left (28ms delay at 412px/s)",
+        )
+
+    def test_the_modelled_offset_survives_an_unmeasured_speed(self):
+        frame = busy_telemetry().snapshot()["frame"]
+        frame.offset_report["speed_px_s"] = None
+        self.assertEqual(
+            cli_status.format_offset(frame),
+            "3px left (28ms delay, speed unknown)",
+        )
+
+    def test_the_fallback_wording_is_kept_while_the_model_is_not_in_use(self):
+        frame = busy_telemetry().snapshot()["frame"]
+        frame.offset_report["modelled"] = False
+        text = cli_status.format_offset(frame)
+        self.assertIn("Lv 3, learned, landing 0.4px early", text)
+        self.assertNotIn("ms delay", text)
 
     def test_offset_with_nothing_learned(self):
         frame = busy_telemetry().snapshot()["frame"]
         frame.offset_report = {}
         self.assertEqual(cli_status.format_offset(frame), "3px left")
+
+
+class NoteSpeedTests(unittest.TestCase):
+    """The measured note speed on the frame, which is often not there."""
+
+    def frame_with(self, speed):
+        frame = LoopFrame()
+        frame.note_speed = speed
+        return frame
+
+    def test_a_frame_with_no_measurement_says_none_and_not_zero(self):
+        # A note that has not been seen yet is not a note standing still, and
+        # a zero here would be divided into the offset as if it were real.
+        self.assertIsNone(LoopFrame().note_speed)
+
+    def test_a_surplus_none_is_still_a_surplus(self):
+        frame = LoopFrame()
+        frame.note_speed = 250.0
+        frame.note_speed = None
+        self.assertIsNone(frame.note_speed)
+
+    def test_the_copy_carries_the_speed_without_sharing_anything(self):
+        frame = self.frame_with(412.0)
+        clone = frame.copy()
+        self.assertEqual(clone.note_speed, 412.0)
+        clone.note_speed = 900.0
+        self.assertEqual(frame.note_speed, 412.0)
+
+    def test_the_copy_of_an_unmeasured_frame_is_still_unmeasured(self):
+        clone = self.frame_with(None).copy()
+        self.assertIsNone(clone.note_speed)
+
+    def test_the_snapshot_carries_the_speed_to_the_display(self):
+        telemetry = Telemetry()
+        telemetry.reset("fishing")
+        telemetry.update(note_speed=412.0)
+        self.assertEqual(telemetry.snapshot()["frame"].note_speed, 412.0)
 
 
 class DrawingTests(unittest.TestCase):

@@ -105,7 +105,12 @@ class Platform(ABC):
         """
         pass
 
-    def offset(self, fish_count: int, speed_level: Optional[int] = None) -> int:
+    def offset(
+        self,
+        fish_count: int,
+        speed_level: Optional[int] = None,
+        speed_px_s: Optional[float] = None,
+    ) -> int:
         """The starting guess for where the note search window should sit.
 
         This is a fixed table, worked out once for one machine and applied to
@@ -114,6 +119,17 @@ class Platform(ABC):
         far the presses are landing off, which is a measurement of the thing
         this guesses at. Kept as the seed, and as the answer for a level that
         has not been played yet.
+
+        ``speed_px_s`` is accepted and deliberately not used. The modelled
+        offset is a latency multiplied by a speed, and this method has no
+        latency to multiply - it is a table of pixels indexed by level, which
+        is the thing the velocity model exists to do without. Worked out from
+        a speed alone, this could only hand back the level table again, with
+        the level standing in for the speed, and it would do so through an
+        extra step that looks like it is doing more than it is. The answer to
+        a caller holding a measurement belongs to the learner that has the
+        other half of the product; a caller without one gets exactly what it
+        got before.
 
         See :mod:`note_offset` for how the window is worked out, and
         :meth:`Platform.offset` history in the log for why it moves at all: a

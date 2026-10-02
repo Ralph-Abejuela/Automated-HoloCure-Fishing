@@ -67,7 +67,7 @@ $ uv run holocure_fishing.py
 Enter 1 for Fishing Mode, 2 for AutoMining mode, or 3 to exit: 1
 ● Arrow 'space' matched, pressed 'space'.
 fishing loop 1,842 · 99.1/s · 3.11ms (cap 1.42 match 1.24 sleep 0.45) · 18s
-chain 24 speed Lv 3 (7 counted here) · 3px left (Lv 3, learned, landing 0.4px early)
+chain 24 speed Lv 3 (7 counted here) · 3px left (21ms delay at 190px/s)
 41 GOOD 6 OK 2 BAD (84% clean of 49) · on time (+0.2px, 3px spread) · press 118ms apart, 40ms ago
 loop ▃▁▂▃▂▁▃▂▁▂▃▁▂▁▂▃▂▁▂▃▂▁▂▃▂▁▂▃▂▁▂▃ peak 3.9ms of 10ms
 21:53:57 key 'space' - rhythm arrow 'space' matched
@@ -168,10 +168,15 @@ That matters because the bot used to count its own catches and work the speed
 out from that. Its count cannot check itself: a missed fish, a bonus one, or a
 run started part way through a chain all leave it disagreeing with the game,
 and the note-search offset that depends on it is then compensating for a speed
-the notes are not travelling at. The panel is the game's own answer, so it is
-what the offset is worked out from now. The bot's count is still kept, and
-shown beside the panel's in the monitor's **Status** tab, because the two
+the notes are not travelling at. The bot's count is still kept, and shown
+beside the panel's in the monitor's **Status** tab, because the two
 disagreeing is worth seeing.
+
+The level is a difficulty dial, not a speed. Two different fish can be at the
+same level and travel across the strip at different speeds, so the level says
+which set of notes you are in and not how fast they are moving. The note
+offset is now worked out from the measured speed (below); the level is what
+the offset falls back on before anything has been measured.
 
 Both numbers appear there as **Game panel**, and the **Note offset** row says
 which chain the shift was worked out for.
@@ -189,19 +194,41 @@ The window the bot searches for notes is moved so presses land on the target
 circle, and where it sits is worked out from how the presses have been landing
 rather than from a table. The circle is a fixed place on the strip, so the
 position of the note when the key goes down, minus the circle's middle, is how
-far early or late that press was. Fifteen presses are averaged, and the window
-moves at most 1.5 pixels each time - two or three chain rounds, so a level is
-corrected within itself rather than after it. A level the game speeds past
-before fifteen presses have gathered still uses what it has.
+far early or late that press was.
 
-There is a separate learned offset per speed level, because the right amount
-differs between level 1 and level 7: a level 7 note crosses the strip several
-times faster, so the same error in pixels is a much smaller error in time. The
-fixed table is only where each level starts, and it never changes - it is a
-constant in the source, the learned values live in memory for the run, and
-nothing is written back, so every run begins from the same guesses. The **Note
-offset** row on the monitor says which of the two you are looking at, and how
-far the recent presses have been landing.
+What is being corrected for is a delay, not a distance. A keypress is never
+instant, and a delay only becomes a distance once you multiply it by how fast
+the note was travelling: the same press, in the same run, is three pixels early
+on a slow note and thirty on a fast one. So the bot learns the delay itself, in
+seconds, and works the pixel offset out from it by multiplying by the note's
+speed. One delay is learned for the whole run, because the delay belongs to
+the machine rather than to the fish - the same scheduler and the same key,
+whether a slow note or a fast one is crossing the strip.
+
+The speed is measured, not read off the panel. A note sits in the search
+window for several consecutive iterations, so `note_motion.py` takes the
+difference of two positions divided by the difference of two clock readings,
+smooths it over a few samples, and throws away anything that is not a speed a
+note could plausibly be doing. A note needs two frames to measure, so the
+first frame of a round after a catch falls back on the level table for one
+note, and the round is measuring again a frame later.
+
+Fifteen presses are averaged, and the learned delay moves at most four
+milliseconds each time - the same restraint the old 1.5 pixel cap was, written
+in the units the step is now actually in, so it holds at every speed. A press
+whose speed was not measured is dropped rather than averaged in, and is not
+counted as learned from, because an error divided by an unknown speed is not a
+small measurement.
+
+The fixed table is only where each level starts before anything has been
+measured, and it never changes - it is a constant in the source, the learned
+delay lives in memory for the run, and nothing is written back, so every run
+begins from the same guesses. The first time a speed is measured the learned
+delay is set so the model produces exactly the offset the table would have
+produced, so the handover is invisible and a run in progress does not change
+behaviour at the moment it happens. The **Note offset** row on the monitor says
+which of the two you are looking at, and shows the learned delay in
+milliseconds and the speed it is being applied at.
 
 # Debugging
 The monitor can save the frames either side of every keypress, named after the

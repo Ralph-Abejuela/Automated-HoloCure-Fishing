@@ -755,6 +755,12 @@ class MonitorWindow:
         by however far the presses land off the circle. Until then it is the
         fixed guess, and saying which it is matters, because a number that
         looks settled may only be the guess it started from.
+
+        When the velocity model is answering, what is worth showing is not
+        the number of presses behind it but the two things it was worked out
+        from, because those are the things that have to be believable: a
+        latency that has drifted away from the machine's real one is a window
+        in the wrong place, and it is the latency that says so.
         """
         report = frame.offset_report or {}
         where = frame.chain if frame.chain is not None else frame.counter
@@ -766,6 +772,20 @@ class MonitorWindow:
             return base
         level = report.get("level")
         presses = report.get("presses", 0)
+        if report.get("modelled"):
+            latency = report.get("latency_ms")
+            if latency is None:
+                return f"{base} (Lv {level}, modelled, no latency measured yet)"
+            speed = report.get("speed_px_s")
+            if speed is None:
+                return (
+                    f"{base} (Lv {level}, {latency:.0f} ms of press delay, "
+                    f"the note speed not measured)"
+                )
+            return (
+                f"{base} (Lv {level}, {latency:.0f} ms of press delay "
+                f"at {speed:.0f} px/s)"
+            )
         if not report.get("learned"):
             return (
                 f"{base} (Lv {level}, the guess it starts from, {presses} presses so far)"

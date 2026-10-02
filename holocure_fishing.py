@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import grades
 import hud
+import note_motion
 import note_offset
 from imgproc import templates, masks
 from telemetry import (
@@ -165,6 +166,13 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
     # how the presses have been landing rather than from a table. See
     # note_offset for why the table is only where it starts.
     offsets = note_offset.OffsetLearner()
+    # How fast the note in hand is travelling, worked out from where it was on
+    # the last frame rather than from what the panel says the level is. The
+    # level is not enough on its own: two fish at one level can travel at
+    # different speeds, and the offset that cancels press latency scales with
+    # the speed, so the speed is the thing worth measuring. See note_motion
+    # for the estimate and note_offset for the model it feeds.
+    motion = note_motion.NoteTracker()
     telemetry.update(keybinds=keybinds)
     telemetry.log(f"Keybinds: {keybinds}")
     unreadable_digits = ", ".join(hud.missing()["chain"]) or "none"
@@ -255,7 +263,13 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
         matches = []
         arrow = None
         chain_now = counter if chain is None else chain
-        offset_pixels = offsets.offset_for(speed_level, chain_now)
+        # Asked before anything is matched, so it is really last frame's
+        # answer. A note needs two frames on the strip before its speed is
+        # known, so the first frame of a round falls back on the level table.
+        # That is the behaviour that already existed, so the change costs a
+        # note rather than a level's worth of accuracy.
+        speed_now = motion.last_speed
+        offset_pixels = offsets.offset_for(speed_level, chain_now, speed_now)
         for key in ("space", "left", "right", "up", "down"):
             h, w, _ = templates[key].shape
             # offset so all templates line up properly
@@ -300,13 +314,20 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 note_centre = window_x + min_loc[0] + w / 2
                 early_by = note_centre - CIRCLE_X
                 telemetry.timing(telemetry.current_loop(), early_by)
+                # Where this note sat against where it sat the last time it
+                # was matched. The capture is already a moment old by the time
+                # the key goes down, and that age is exactly the lateness the
+                # offset exists to cancel, so the speed is measured off the
+                # capture and not off the press.
+                sample = motion.update(key, note_centre, time.perf_counter())
+                if sample is not None:
+                    speed_now = sample.px_per_second
                 # and the one thing that can act on it: the window is moved
-                # towards landing on the circle, a level at a time. Only once
-                # the panel has said what level this is - before that the
-                # level is a guess off the chain, and a guess is not worth
-                # teaching a level with.
+                # towards landing on the circle. Only once the panel has said
+                # what level this is - before that the level is a guess off
+                # the chain, and a guess is not worth teaching with.
                 if speed_level is not None:
-                    offsets.observe(early_by, speed_level, chain_now)
+                    offsets.observe(early_by, speed_level, chain_now, speed_now)
                 # ask again next iteration, once the game has had a moment to
                 # say what it made of this one
                 pending_press = (telemetry.current_loop(), keybinds[key], 0)
@@ -338,6 +359,12 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
                 platform.press_key("enter")
                 time.sleep(settings["fishing_ok_gap"])
             counter += 1
+            # A catch ends the round, and the next fish is a different one:
+            # how fast the last note went says nothing about how fast this
+            # one will. The speed is dropped rather than carried over, so the
+            # first frame of the next round uses the level table and the round
+            # is measuring again a frame later.
+            motion.reset()
             telemetry.log(f"Fishing count: {counter}", level="good")
 
         # Read the chain and the speed level off the panel, which is only on
@@ -396,10 +423,11 @@ def fishing_mode(platform, settings: Timings, telemetry: Telemetry = None) -> No
             offset=offset_pixels,
             chain=chain,
             speed_level=speed_level,
+            note_speed=speed_now,
             grade_good=grade_counts["GOOD"],
             grade_ok=grade_counts["OK"],
             grade_bad=grade_counts["BAD"],
-            offset_report=offsets.report(speed_level, chain_now),
+            offset_report=offsets.report(speed_level, chain_now, speed_now),
             capture_ms=capture_ms,
             match_ms=match_ms,
             loop_ms=elapsed * 1000,

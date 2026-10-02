@@ -130,6 +130,12 @@ class LoopFrame:
     chain: Optional[int] = None
     #: The speed level the panel is showing, likewise.
     speed_level: Optional[int] = None
+    #: How fast the note itself was travelling, in pixels a second, measured
+    #: off the match this frame made. None is the ordinary answer for every
+    #: frame with no note on the strip to measure, which is not the same as
+    #: zero: a note that has not been seen yet is not a note standing still,
+    #: and a zero here would be divided into the offset.
+    note_speed: Optional[float] = None
     #: How the game has graded the presses so far: GOOD, OK and BAD counts.
     grade_good: int = 0
     grade_ok: int = 0

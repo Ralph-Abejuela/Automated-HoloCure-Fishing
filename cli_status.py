@@ -206,7 +206,10 @@ def format_offset(frame) -> str:
     Once a level has been played the shift is measured. Until then it is the
     fixed guess, and saying which it is matters, because a number that looks
     settled may only be the guess it started from. The sign is carried by the
-    word, so the shift is shown as a distance.
+    word, so the shift is shown as a distance. Under the velocity model the
+    two things it was worked out from are shown instead of the presses, since
+    a latency and a note speed are what a wrong window has to be argued
+    against.
     """
     report = frame.offset_report or {}
     level = report.get("level")
@@ -216,6 +219,14 @@ def format_offset(frame) -> str:
         where = f"{abs(frame.offset)}px left"
     if not report:
         return where
+    if report.get("modelled"):
+        latency = report.get("latency_ms")
+        if latency is None:
+            return f"{where} (modelled, no latency yet)"
+        speed = report.get("speed_px_s")
+        if speed is None:
+            return f"{where} ({latency:.0f}ms delay, speed unknown)"
+        return f"{where} ({latency:.0f}ms delay at {speed:.0f}px/s)"
     if not report.get("learned"):
         return f"{where} (Lv {level}, the guess, {report.get('presses', 0)} presses)"
     mean = report.get("mean_error", 0.0)

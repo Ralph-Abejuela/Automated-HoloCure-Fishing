@@ -4,6 +4,12 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 This is the first tagged release. Everything below happened between the last untagged snapshot and `v0.1.0`, so it is listed together.
 
+## [Unreleased]
+
+### Changed
+
+- **The note offset is worked out from a measured note speed instead of the speed level.** The offset exists to cancel how late the bot's keypress is, which is a delay rather than a distance: the same press is a few pixels early on a slow note and many more on a fast one. The level on the panel is a difficulty dial, not a speed - two fish can share a level and cross the strip at different speeds - so one learned offset per level could not be right for both. The bot now learns the delay in seconds, once for the whole run, and multiplies it by the speed of the note in hand. `note_motion.py` measures that speed from where the note sat on consecutive frames. The per-level table is unchanged and still answers before anything has been measured, and the first measured note is given exactly the offset the table would have given, so a run in progress does not change behaviour at the handover.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added
