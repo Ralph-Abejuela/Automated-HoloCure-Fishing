@@ -97,7 +97,7 @@ TIMINGS = (
     TimingSpec(
         "press_jitter",
         KIND_DELAY,
-        0.02,
+        0.01,
         "Extra random wait of up to this much before each keypress. 0 turns "
         "it off.",
         maximum=0.5,
